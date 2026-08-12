@@ -15,10 +15,8 @@
 
 <main>
   <section id="db-bar">
-    <button id="db-reconnect" class="hidden" title="Re-confirm access to the previously connected eqinfo.sqlite - no file picker needed">Reconnect to eqinfo.sqlite</button>
-    <button id="db-connect-existing">Open Existing eqinfo.sqlite</button>
-    <button id="db-connect-new">Create New eqinfo.sqlite</button>
-    <span id="db-status">Checking for a saved database connection...</span>
+    <span id="db-status">Loading local database...</span>
+    <button id="db-export-btn" title="Download the current local database as a portable eqinfo.sqlite file - useful for backups or moving data to another browser/device">Export .sqlite</button>
   </section>
 
   <section id="controls">
@@ -103,7 +101,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
-<script src="js/handle-store.js"></script>
+<script src="js/blob-store.js"></script>
 <script src="js/cookies.js"></script>
 <script src="js/timeformat.js"></script>
 <script src="js/db.js"></script>

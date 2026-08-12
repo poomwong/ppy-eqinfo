@@ -1,5 +1,6 @@
-// SQLite (via sql.js/WASM) persistence layer, backed by a local .sqlite
-// file connected through the File System Access API. Owns the schema,
+// SQLite (via sql.js/WASM) persistence layer, backed by an IndexedDB blob
+// (see blob-store.js) so it loads/saves automatically with no file picker -
+// works under file:// and http(s) hosting alike. Owns the schema,
 // migrations, and all CRUD - main.js is the only caller.
 
 const DB_FILENAME_SUGGESTION = "eqinfo.sqlite";
@@ -118,7 +119,6 @@ function needsDetailRefresh(detail) {
 
 let SQL = null;
 let sqlDb = null;
-let fileHandle = null;
 
 async function ensureSqlJs() {
   if (!SQL) {
@@ -128,80 +128,48 @@ async function ensureSqlJs() {
 }
 
 function isSupported() {
-  return typeof window.showOpenFilePicker === "function";
+  return typeof indexedDB !== "undefined";
 }
 
-async function verifyPermission(handle, readWrite) {
-  const opts = readWrite ? { mode: "readwrite" } : {};
-  if ((await handle.queryPermission(opts)) === "granted") return true;
-  if ((await handle.requestPermission(opts)) === "granted") return true;
-  return false;
-}
-
-async function loadDatabaseFromHandle(handle) {
+// Loads the sqlite blob from IndexedDB (or starts a fresh empty database if
+// none exists yet/it's corrupted) and applies schema + migrations. Runs
+// automatically on page load - no picker, no permission prompt.
+async function loadDatabase() {
   await ensureSqlJs();
-  const file = await handle.getFile();
-  const buf = await file.arrayBuffer();
-  sqlDb = buf.byteLength > 0 ? new SQL.Database(new Uint8Array(buf)) : new SQL.Database();
+  let bytes = null;
+  try {
+    bytes = await window.BlobStore.loadBlob();
+  } catch (err) {
+    console.error("Failed to read stored database, starting fresh:", err);
+  }
+  try {
+    sqlDb = bytes && bytes.byteLength > 0 ? new SQL.Database(new Uint8Array(bytes)) : new SQL.Database();
+  } catch (err) {
+    console.error("Stored database was corrupted, starting fresh:", err);
+    sqlDb = new SQL.Database();
+  }
   sqlDb.run(SCHEMA);
   migrateDetailsTable();
-  fileHandle = handle;
   await persist();
-  return { name: file.name };
 }
 
 async function persist() {
-  if (!sqlDb || !fileHandle) return;
-  const data = sqlDb.export();
-  const writable = await fileHandle.createWritable();
-  await writable.write(data);
-  await writable.close();
+  if (!sqlDb) return;
+  await window.BlobStore.saveBlob(sqlDb.export());
 }
 
-async function connectExisting() {
-  const [handle] = await window.showOpenFilePicker({
-    types: [{ description: "SQLite database", accept: { "application/x-sqlite3": [".sqlite", ".db"] } }],
-    excludeAcceptAllOption: false,
-    multiple: false,
-  });
-  if (!(await verifyPermission(handle, true))) throw new Error("Permission denied");
-  await window.HandleStore.saveHandle(handle);
-  return loadDatabaseFromHandle(handle);
-}
-
-async function connectNew() {
-  const handle = await window.showSaveFilePicker({
-    suggestedName: DB_FILENAME_SUGGESTION,
-    types: [{ description: "SQLite database", accept: { "application/x-sqlite3": [".sqlite"] } }],
-  });
-  if (!(await verifyPermission(handle, true))) throw new Error("Permission denied");
-  await window.HandleStore.saveHandle(handle);
-  return loadDatabaseFromHandle(handle);
-}
-
-// Runs on page load with no user gesture, so it must NEVER call
-// requestPermission() - browsers require a user activation for that and
-// will just silently refuse (or throw) otherwise. Only queryPermission()
-// (which needs no gesture) is safe here. If the browser already remembers
-// this handle as granted (which Chrome/Edge normally do across restarts),
-// this fully auto-connects with zero clicks. Otherwise it hands back the
-// known handle so the UI can offer a single "Reconnect" button - no need to
-// re-pick the file via the native dialog, just re-confirm permission.
-async function reconnectSaved() {
-  const handle = await window.HandleStore.loadHandle();
-  if (!handle) return { status: "no-handle" };
-  const granted = (await handle.queryPermission({ mode: "readwrite" })) === "granted";
-  if (!granted) return { status: "needs-permission", handle };
-  const info = await loadDatabaseFromHandle(handle);
-  return { status: "connected", name: info.name };
-}
-
-// The click-triggered counterpart to the "needs-permission" case above -
-// safe to call requestPermission() here since it's in direct response to a
-// user gesture.
-async function reconnectWithPermission(handle) {
-  if (!(await verifyPermission(handle, true))) throw new Error("Permission denied");
-  return loadDatabaseFromHandle(handle);
+// Manual escape hatch to keep the data portable despite living in IndexedDB:
+// downloads the current database as a real .sqlite file the user can open in
+// any SQLite tool, back up, or hand to another browser/device.
+function exportSqliteFile() {
+  if (!sqlDb) return;
+  const blob = new Blob([sqlDb.export()], { type: "application/x-sqlite3" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = DB_FILENAME_SUGGESTION;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function run(sql, params = []) {
@@ -316,10 +284,8 @@ async function upsertDetail(id, d, { skipPersist = false } = {}) {
 
 window.EqDb = {
   isSupported,
-  connectExisting,
-  connectNew,
-  reconnectSaved,
-  reconnectWithPermission,
+  loadDatabase,
+  exportSqliteFile,
   upsertEarthquake,
   getEarthquakes,
   getDetail,

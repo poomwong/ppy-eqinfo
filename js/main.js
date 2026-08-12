@@ -11,9 +11,7 @@ const fetchNewBtn = document.getElementById("fetch-new-btn");
 const refetchAllBtn = document.getElementById("refetch-all-btn");
 const timeToggleBtn = document.getElementById("time-toggle-btn");
 const timeColLabel = document.getElementById("time-col-label");
-const connectExistingBtn = document.getElementById("db-connect-existing");
-const connectNewBtn = document.getElementById("db-connect-new");
-const reconnectBtn = document.getElementById("db-reconnect");
+const dbExportBtn = document.getElementById("db-export-btn");
 const tabListBtn = document.getElementById("tab-list");
 const tabDetailBtn = document.getElementById("tab-detail");
 const lookupInput = document.getElementById("lookup-input");
@@ -388,69 +386,44 @@ async function fullSync({ force = false } = {}) {
   }
 }
 
-// --- Database connection UI --------------------------------------------
-async function connectAndSync(connectFn) {
-  const { name } = await connectFn();
-  dbReady = true;
-  setDbStatus(`Connected: ${name}`);
-  reconnectBtn.classList.add("hidden");
-  await fullSync();
-}
-
-async function initDbUi() {
+// --- Database connection ------------------------------------------------
+// Loads automatically on every page open, no picker or click required - the
+// database lives in IndexedDB (see blob-store.js), which works the same way
+// under file:// and http(s) hosting (e.g. GitHub Pages).
+async function initDb() {
   if (!EqDb.isSupported()) {
-    setDbStatus(
-      "This browser does not support the File System Access API needed to read/write a local .sqlite file. Please use Chrome or Edge."
-    );
-    connectExistingBtn.disabled = true;
-    connectNewBtn.disabled = true;
+    setDbStatus("This browser does not support IndexedDB, needed to store earthquake data locally.");
     return;
   }
 
-  connectExistingBtn.addEventListener("click", async () => {
+  // Ask the browser to treat this site's storage as durable rather than
+  // best-effort/evictable. Not guaranteed, but harmless to request.
+  if (navigator.storage?.persist) {
     try {
-      await connectAndSync(EqDb.connectExisting);
-    } catch (err) {
-      if (err.name !== "AbortError") setDbStatus(`Connection failed: ${err.message}`);
+      await navigator.storage.persist();
+    } catch {
+      // Not critical if unsupported/denied - storage still works, just
+      // without the eviction-resistance guarantee.
     }
-  });
-
-  connectNewBtn.addEventListener("click", async () => {
-    try {
-      await connectAndSync(EqDb.connectNew);
-    } catch (err) {
-      if (err.name !== "AbortError") setDbStatus(`Connection failed: ${err.message}`);
-    }
-  });
+  }
 
   try {
-    const result = await EqDb.reconnectSaved();
-    if (result.status === "connected") {
-      dbReady = true;
-      setDbStatus(`Connected: ${result.name}`);
-      await fullSync();
-    } else if (result.status === "needs-permission") {
-      setDbStatus("Found a previously connected database - click Reconnect to resume (no file picker needed).");
-      reconnectBtn.classList.remove("hidden");
-      reconnectBtn.addEventListener("click", async () => {
-        try {
-          await connectAndSync(() => EqDb.reconnectWithPermission(result.handle));
-        } catch (err) {
-          if (err.name !== "AbortError") setDbStatus(`Reconnect failed: ${err.message}`);
-        }
-      });
-    } else {
-      setDbStatus("Not connected. Choose or create eqinfo.sqlite to begin.");
-    }
+    setDbStatus("Loading local database...");
+    await EqDb.loadDatabase();
+    dbReady = true;
+    setDbStatus("Ready");
+    await fullSync();
   } catch (err) {
-    setDbStatus("Not connected. Choose or create eqinfo.sqlite to begin.");
+    setDbStatus(`Failed to load local database: ${err.message}`);
+    console.error(err);
   }
 }
 
 // --- Startup & event wiring ----------------------------------------------
 EqMap.initMap();
 setControlsEnabled(false);
-initDbUi();
+initDb();
+dbExportBtn.addEventListener("click", () => EqDb.exportSqliteFile());
 
 fetchNewBtn.addEventListener("click", () => fullSync({ force: false }));
 refetchAllBtn.addEventListener("click", () => fullSync({ force: true }));
