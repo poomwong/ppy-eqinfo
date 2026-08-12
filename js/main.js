@@ -5,6 +5,7 @@ const fetchNewBtn = document.getElementById("fetch-new-btn");
 const refetchAllBtn = document.getElementById("refetch-all-btn");
 const connectExistingBtn = document.getElementById("db-connect-existing");
 const connectNewBtn = document.getElementById("db-connect-new");
+const reconnectBtn = document.getElementById("db-reconnect");
 const tabListBtn = document.getElementById("tab-list");
 const tabDetailBtn = document.getElementById("tab-detail");
 const listSection = document.getElementById("list-section-wrap");
@@ -185,6 +186,14 @@ async function fullSync({ force = false } = {}) {
   }
 }
 
+async function connectAndSync(connectFn) {
+  const { name } = await connectFn();
+  dbReady = true;
+  setDbStatus(`Connected: ${name}`);
+  reconnectBtn.classList.add("hidden");
+  await fullSync();
+}
+
 async function initDbUi() {
   if (!EqDb.isSupported()) {
     setDbStatus(
@@ -197,10 +206,7 @@ async function initDbUi() {
 
   connectExistingBtn.addEventListener("click", async () => {
     try {
-      const { name } = await EqDb.connectExisting();
-      dbReady = true;
-      setDbStatus(`Connected: ${name}`);
-      await fullSync();
+      await connectAndSync(EqDb.connectExisting);
     } catch (err) {
       if (err.name !== "AbortError") setDbStatus(`Connection failed: ${err.message}`);
     }
@@ -208,21 +214,28 @@ async function initDbUi() {
 
   connectNewBtn.addEventListener("click", async () => {
     try {
-      const { name } = await EqDb.connectNew();
-      dbReady = true;
-      setDbStatus(`Connected: ${name}`);
-      await fullSync();
+      await connectAndSync(EqDb.connectNew);
     } catch (err) {
       if (err.name !== "AbortError") setDbStatus(`Connection failed: ${err.message}`);
     }
   });
 
   try {
-    const reconnected = await EqDb.reconnectSaved();
-    if (reconnected) {
+    const result = await EqDb.reconnectSaved();
+    if (result.status === "connected") {
       dbReady = true;
-      setDbStatus(`Connected: ${reconnected.name}`);
+      setDbStatus(`Connected: ${result.name}`);
       await fullSync();
+    } else if (result.status === "needs-permission") {
+      setDbStatus("Found a previously connected database - click Reconnect to resume (no file picker needed).");
+      reconnectBtn.classList.remove("hidden");
+      reconnectBtn.addEventListener("click", async () => {
+        try {
+          await connectAndSync(() => EqDb.reconnectWithPermission(result.handle));
+        } catch (err) {
+          if (err.name !== "AbortError") setDbStatus(`Reconnect failed: ${err.message}`);
+        }
+      });
     } else {
       setDbStatus("Not connected. Choose or create eqinfo.sqlite to begin.");
     }

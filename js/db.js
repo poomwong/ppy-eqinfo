@@ -175,10 +175,28 @@ async function connectNew() {
   return loadDatabaseFromHandle(handle);
 }
 
+// Runs on page load with no user gesture, so it must NEVER call
+// requestPermission() - browsers require a user activation for that and
+// will just silently refuse (or throw) otherwise. Only queryPermission()
+// (which needs no gesture) is safe here. If the browser already remembers
+// this handle as granted (which Chrome/Edge normally do across restarts),
+// this fully auto-connects with zero clicks. Otherwise it hands back the
+// known handle so the UI can offer a single "Reconnect" button - no need to
+// re-pick the file via the native dialog, just re-confirm permission.
 async function reconnectSaved() {
   const handle = await window.HandleStore.loadHandle();
-  if (!handle) return null;
-  if (!(await verifyPermission(handle, true))) return null;
+  if (!handle) return { status: "no-handle" };
+  const granted = (await handle.queryPermission({ mode: "readwrite" })) === "granted";
+  if (!granted) return { status: "needs-permission", handle };
+  const info = await loadDatabaseFromHandle(handle);
+  return { status: "connected", name: info.name };
+}
+
+// The click-triggered counterpart to the "needs-permission" case above -
+// safe to call requestPermission() here since it's in direct response to a
+// user gesture.
+async function reconnectWithPermission(handle) {
+  if (!(await verifyPermission(handle, true))) throw new Error("Permission denied");
   return loadDatabaseFromHandle(handle);
 }
 
@@ -223,7 +241,8 @@ async function upsertEarthquake(q, { force = false, skipPersist = false } = {}) 
 
 function getEarthquakes(sinceMs) {
   return all(
-    `SELECT e.*, d.has_shakemap AS d_has_shakemap, d.sm_max_pga_onland AS d_sm_max_pga_onland,
+    `SELECT e.*, d.has_shakemap AS d_has_shakemap, d.sm_max_pga AS d_sm_max_pga,
+            d.sm_max_pga_onland AS d_sm_max_pga_onland,
             d.sm_onland_station_count AS d_sm_onland_station_count,
             d.sm_max_pga_onland_dyfi AS d_sm_max_pga_onland_dyfi, d.sm_max_mmi AS d_sm_max_mmi
      FROM earthquakes e
@@ -296,6 +315,7 @@ window.EqDb = {
   connectExisting,
   connectNew,
   reconnectSaved,
+  reconnectWithPermission,
   upsertEarthquake,
   getEarthquakes,
   getDetail,
