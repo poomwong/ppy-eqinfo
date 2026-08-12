@@ -188,14 +188,12 @@ function wireSortHeaders() {
 // --- USGS sync rate limiting ----------------------------------------------
 // Purely a client-side courtesy/accident-guard, not real protection - anyone
 // with devtools can call UsgsApi directly and bypass it, since this is a
-// static site with no server to enforce anything. What it does stop: reload
-// storms, multiple tabs, and double-clicks, which are the realistic ways a
-// personal tool left publicly hosted ends up hammering USGS. Persisted in
-// localStorage so it survives reloads. Fetch New's cooldown also covers the
-// automatic sync that runs on every page load, since that's the same call.
-const FETCH_NEW_COOLDOWN_MS = 5 * 60 * 1000;
-const REFETCH_ALL_COOLDOWN_MS = 15 * 60 * 1000;
-const LAST_FETCH_NEW_KEY = "eqinfo_last_fetch_new_at";
+// static site with no server to enforce anything. Only Re-fetch All is
+// limited (it force-refetches every cached event's technical data, by far
+// the most expensive operation) - Fetch New is incremental by design
+// (syncAllDetails only pulls what's new/changed) so it isn't rate-limited.
+// Persisted in localStorage so it survives reloads.
+const REFETCH_ALL_COOLDOWN_MS = 10 * 60 * 1000;
 const LAST_REFETCH_ALL_KEY = "eqinfo_last_refetch_all_at";
 let syncInProgress = false;
 
@@ -206,9 +204,7 @@ function cooldownRemainingMs(key, cooldownMs) {
 }
 
 function markSynced(force) {
-  const now = String(Date.now());
-  Cookies.writeCookie(LAST_FETCH_NEW_KEY, now);
-  if (force) Cookies.writeCookie(LAST_REFETCH_ALL_KEY, now);
+  if (force) Cookies.writeCookie(LAST_REFETCH_ALL_KEY, String(Date.now()));
 }
 
 // --- Status helpers & tabs ------------------------------------------------
@@ -216,22 +212,15 @@ function setDbStatus(msg) {
   dbStatusEl.textContent = msg;
 }
 
-const fetchNewDefaultTitle = fetchNewBtn.title;
 const refetchAllDefaultTitle = refetchAllBtn.title;
 
-// Reflects the rate-limit cooldown into the buttons (disabled + a title
-// explaining why and when it'll clear). Called after every sync and on a
-// periodic timer so a button re-enables itself once its cooldown expires,
+// Reflects Re-fetch All's rate-limit cooldown into the button (disabled + a
+// title explaining why and when it'll clear). Called after every sync and
+// on a periodic timer so it re-enables itself once the cooldown expires,
 // without needing another click or reload.
 function updateSyncCooldownUi() {
   if (syncInProgress) return;
-  const fetchRemaining = cooldownRemainingMs(LAST_FETCH_NEW_KEY, FETCH_NEW_COOLDOWN_MS);
   const refetchRemaining = cooldownRemainingMs(LAST_REFETCH_ALL_KEY, REFETCH_ALL_COOLDOWN_MS);
-  fetchNewBtn.disabled = fetchRemaining > 0;
-  fetchNewBtn.title =
-    fetchRemaining > 0
-      ? `Rate-limited to avoid hammering USGS's public API - available again in ~${Math.ceil(fetchRemaining / 60000)} min`
-      : fetchNewDefaultTitle;
   refetchAllBtn.disabled = refetchRemaining > 0;
   refetchAllBtn.title =
     refetchRemaining > 0
@@ -242,6 +231,7 @@ function updateSyncCooldownUi() {
 function setControlsEnabled(enabled) {
   daysSelect.disabled = !enabled;
   if (enabled) {
+    fetchNewBtn.disabled = false;
     updateSyncCooldownUi();
   } else {
     fetchNewBtn.disabled = true;
@@ -460,14 +450,13 @@ async function syncAllDetails(rows, { force = false, changedIds = new Set() } = 
 async function fullSync({ force = false } = {}) {
   if (!dbReady || syncInProgress) return;
 
-  const cooldownRemaining = cooldownRemainingMs(
-    force ? LAST_REFETCH_ALL_KEY : LAST_FETCH_NEW_KEY,
-    force ? REFETCH_ALL_COOLDOWN_MS : FETCH_NEW_COOLDOWN_MS
-  );
-  if (cooldownRemaining > 0) {
-    const minutes = Math.ceil(cooldownRemaining / 60000);
-    statusEl.textContent = `${force ? "Re-fetch All" : "Fetch New"} is rate-limited - try again in ~${minutes} min.`;
-    return;
+  if (force) {
+    const cooldownRemaining = cooldownRemainingMs(LAST_REFETCH_ALL_KEY, REFETCH_ALL_COOLDOWN_MS);
+    if (cooldownRemaining > 0) {
+      const minutes = Math.ceil(cooldownRemaining / 60000);
+      statusEl.textContent = `Re-fetch All is rate-limited - try again in ~${minutes} min.`;
+      return;
+    }
   }
 
   syncInProgress = true;
