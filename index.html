@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Earthquake Info Aggregator</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Earthquake Info Aggregator</h1>
+  <p class="subtitle">Global earthquakes, magnitude 6.0+ &mdash; source: USGS</p>
+</header>
+
+<main>
+  <section id="controls">
+    <label for="days-select">Time range:</label>
+    <select id="days-select">
+      <option value="7">Past 7 days</option>
+      <option value="30" selected>Past 30 days</option>
+      <option value="90">Past 90 days</option>
+      <option value="365">Past year</option>
+    </select>
+    <button id="refresh-btn">Refresh</button>
+    <span id="status"></span>
+  </section>
+
+  <section id="map"></section>
+
+  <section id="list-section">
+    <table id="eq-table">
+      <thead>
+        <tr>
+          <th data-key="time">Date &amp; Time (UTC)</th>
+          <th data-key="latlon">Lat, Long</th>
+          <th data-key="mag">Magnitude</th>
+          <th data-key="place">Location</th>
+          <th>Link</th>
+        </tr>
+      </thead>
+      <tbody id="eq-table-body">
+      </tbody>
+    </table>
+  </section>
+</main>
+
+<footer>
+  <p>Data provided by the <a href="https://earthquake.usgs.gov/" target="_blank" rel="noopener">USGS Earthquake Hazards Program</a>.</p>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
