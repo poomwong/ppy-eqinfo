@@ -1,7 +1,9 @@
 let mode = "utc"; // "utc" | "local" - display only; everything is stored in UTC.
 
+// No timezone suffix in either mode - the column header already states
+// which one is active, so repeating it on every row is just noise.
 function formatUtc(d) {
-  return d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+  return d.toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
 }
 
 function formatLocal(d) {
@@ -13,7 +15,6 @@ function formatLocal(d) {
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
-    timeZoneName: "short",
   }).format(d);
 }
 

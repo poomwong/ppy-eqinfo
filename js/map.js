@@ -25,9 +25,20 @@ function renderMap(quakes, onSelect) {
       fillOpacity: 0.5,
     });
     marker.bindPopup(
-      `<strong>M ${q.mag.toFixed(1)}</strong> &mdash; ${q.place}<br>${TimeFormat.format(q.time)}`
+      `<div class="map-popup">
+         <strong>M ${q.mag.toFixed(1)}</strong> &mdash; ${q.place}<br>
+         ${TimeFormat.format(q.time)}<br>
+         <a href="#" class="popup-view-details">View Details &rarr;</a>
+       </div>`
     );
-    marker.on("click", () => onSelect(q.id));
+    marker.on("popupopen", (e) => {
+      const link = e.popup.getElement()?.querySelector(".popup-view-details");
+      if (!link) return;
+      link.addEventListener("click", (evt) => {
+        evt.preventDefault();
+        onSelect(q.id);
+      });
+    });
     marker.addTo(markersLayer);
   });
 }

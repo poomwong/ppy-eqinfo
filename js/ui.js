@@ -23,15 +23,13 @@ const ALERT_COLORS = { green: "#4CAF50", yellow: "#FDD835", orange: "#FB8C00", r
 function alertCell(q) {
   if (!q.alert) return `<span class="empty-note">-</span>`;
   const color = ALERT_COLORS[q.alert] ?? "#888";
-  return `<span class="alert-dot" style="background:${color}" title="PAGER alert: ${q.alert}"></span>${q.alert}`;
-}
-
-function statusCell(q) {
-  return q.status ?? `<span class="empty-note">-</span>`;
+  return `<span class="alert-dot" style="background:${color}" title="PAGER alert: ${q.alert}"></span>`;
 }
 
 function tsunamiCell(q) {
-  return q.tsunami ? `<span title="Tsunami warning was issued for this event">&#127754;</span>` : "";
+  return q.tsunami
+    ? `<img class="tsunami-icon" src="icons/hazard/tsunami.svg" alt="Tsunami warning" title="Tsunami warning was issued for this event">`
+    : "";
 }
 
 function mmiCell(q) {
@@ -57,15 +55,14 @@ function renderTable(quakes, onSelect) {
     tr.dataset.id = q.id;
     const magClass = q.mag >= 7.0 ? "mag-cell mag-high" : "mag-cell";
     tr.innerHTML = `
-      <td>${reviewInfoIcon(q)}${formatDateTime(q.time)}</td>
+      <td>${formatDateTime(q.time)}</td>
       <td>${fmtNum(q.latitude, 3)}, ${fmtNum(q.longitude, 3)}</td>
-      <td class="${magClass}">${fmtNum(q.mag, 1)}</td>
+      <td class="${magClass}">${reviewInfoIcon(q)}${fmtNum(q.mag, 1)}</td>
       <td>${q.place ?? "Unknown"}</td>
-      <td>${alertCell(q)}</td>
-      <td>${statusCell(q)}</td>
-      <td class="tsunami-cell">${tsunamiCell(q)}</td>
       <td>${mmiCell(q)}</td>
       <td>${shindoCell(q)}</td>
+      <td class="alert-cell">${alertCell(q)}</td>
+      <td class="tsunami-cell">${tsunamiCell(q)}</td>
       <td><a href="${q.url}" target="_blank" rel="noopener" class="row-link">USGS &rarr;</a></td>
     `;
     tr.addEventListener("click", (e) => {
