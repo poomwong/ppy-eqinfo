@@ -35,7 +35,7 @@ function format(ms) {
 
 function toggle() {
   mode = mode === "utc" ? "local" : "utc";
-  Cookies.writeCookie(MODE_COOKIE, mode, 365);
+  Cookies.writeCookie(MODE_COOKIE, mode);
   return mode;
 }
 

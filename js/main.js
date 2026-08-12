@@ -49,7 +49,7 @@ function loadTargetLocation() {
 }
 
 function saveTargetLocation() {
-  Cookies.writeCookie(LOCATION_COOKIE, JSON.stringify(targetLocation), 365);
+  Cookies.writeCookie(LOCATION_COOKIE, JSON.stringify(targetLocation));
 }
 
 // Target location for the local MMI / long-period estimate, remembered
