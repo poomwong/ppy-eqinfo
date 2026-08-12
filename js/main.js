@@ -547,7 +547,7 @@ async function initDb() {
     setDbStatus("Loading local database...");
     await EqDb.loadDatabase();
     dbReady = true;
-    setDbStatus("Ready");
+    setDbStatus("");
 
     if (alreadyAutoSyncedThisHour()) {
       renderFromDb();
