@@ -250,9 +250,18 @@ function computeLocalEstimate(quake, targetLocation) {
   );
 }
 
+// JMA doesn't publish official text labels for the four long-period classes
+// (only the kine bands) - this is a plain-language severity ramp matching
+// their class descriptions (1: barely noticeable sway up to 4: hard to stand,
+// unsecured furniture moves), used here so the badge doesn't just show a
+// bare "1"-"4" with no context.
+const LONG_PERIOD_LABELS = { 1: "Slight", 2: "Moderate", 3: "Strong", 4: "Severe" };
+
 function localEstimateBadges(quake, targetLocation) {
   const estimate = computeLocalEstimate(quake, targetLocation);
-  if (!estimate || estimate.mmiRounded < 1) return "";
+  // Hidden only when BOTH are zero (nothing meaningful to show) - either one
+  // alone being non-zero is still worth displaying.
+  if (!estimate || (estimate.mmiRounded < 1 && estimate.longPeriodClass === 0)) return "";
 
   const isBangkokDefault = targetLocation.lat === BANGKOK_DEFAULT.lat && targetLocation.lon === BANGKOK_DEFAULT.lon;
   const locLabel = isBangkokDefault ? "Bangkok" : `${estimate.repiKm.toFixed(0)}km site`;
@@ -260,20 +269,23 @@ function localEstimateBadges(quake, targetLocation) {
   const commonTitle = `Estimated from magnitude + epicentral distance (${estimate.repiKm.toFixed(0)}km to ${locLabel}) via the Allen, Wald &amp; Worden (2012) IPE${amplifyNote} - NOT derived from ShakeMap data, a rough estimate only`;
 
   const [bg, fg] = mmiColors(estimate.mmi);
-  const localMmi = `
+  const localMmi =
+    estimate.mmiRounded >= 1
+      ? `
     <div class="intensity-badge" style="background:${bg};color:${fg};border-color:${bg}" title="${commonTitle}">
       <span class="intensity-label" style="color:${fg}">MMI @ ${locLabel}</span>
-      <span class="intensity-value">${estimate.mmiRounded}</span>
+      <span class="intensity-value">${mmiRoman(estimate.mmi)}</span>
     </div>
-  `;
+  `
+      : "";
 
   const longPeriod =
     estimate.longPeriodClass > 0
       ? `
-    <div class="intensity-badge" title="Estimated JMA long-period ground motion class (~${estimate.longPeriodKine.toFixed(1)} kine estimated) - a rough estimate derived from the local MMI estimate, not JMA's actual computed grade">
+    <div class="intensity-badge" title="Estimated JMA long-period ground motion class ${estimate.longPeriodClass} (~${estimate.longPeriodKine.toFixed(1)} kine estimated) - a rough estimate derived from the local MMI estimate, not JMA's actual computed grade">
       <img class="shindo-icon" src="${LONG_PERIOD_ICONS[estimate.longPeriodClass]}" alt="Long-period class ${estimate.longPeriodClass}">
       <span class="intensity-label">LONG PERIOD</span>
-      <span class="intensity-value">${estimate.longPeriodClass}</span>
+      <span class="intensity-value">${LONG_PERIOD_LABELS[estimate.longPeriodClass]}</span>
     </div>
   `
       : "";
