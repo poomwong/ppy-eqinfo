@@ -43,11 +43,21 @@ function renderTable(quakes, onSelect) {
   });
 }
 
-// Dobry, Idriss & Ng (1978) magnitude-duration relation: a rough estimate of
-// how long strong shaking might last near the source, from magnitude alone.
-function estimatedShakingDuration(mag) {
-  if (mag === null || mag === undefined || Number.isNaN(mag)) return null;
-  return Math.pow(10, 0.432 * mag - 1.83);
+function planeInterpretation(label, strike, dip, rake) {
+  const faultType = FaultGeom.classifyFaultType(rake, dip);
+  const slip = FaultGeom.describeSlip(strike, dip, rake);
+  return `
+    <div>
+      <h4>${label}</h4>
+      <dl>
+        <dt>Strike</dt><dd>${fmtNum(strike)}&deg;</dd>
+        <dt>Dip</dt><dd>${fmtNum(dip)}&deg;</dd>
+        <dt>Rake</dt><dd>${fmtNum(rake)}&deg;</dd>
+        <dt>Fault Type</dt><dd>${faultType ?? "-"}</dd>
+        <dt>Ground Motion</dt><dd>${slip ?? "-"}</dd>
+      </dl>
+    </div>
+  `;
 }
 
 function tensorSection(detail, quake) {
@@ -60,30 +70,16 @@ function tensorSection(detail, quake) {
   const beachball = hasPlanes
     ? `<canvas id="beachball-canvas" class="beachball" width="160" height="160"></canvas>`
     : "";
-  const estDuration = estimatedShakingDuration(quake?.mag);
 
   return `
     <div class="tensor-layout">
       <div class="grid-2">
-        <div>
-          <h4>Nodal Plane 1</h4>
-          <dl>
-            <dt>Strike</dt><dd>${fmtNum(detail.mt_np1_strike)}&deg;</dd>
-            <dt>Dip</dt><dd>${fmtNum(detail.mt_np1_dip)}&deg;</dd>
-            <dt>Rake</dt><dd>${fmtNum(detail.mt_np1_rake)}&deg;</dd>
-          </dl>
-        </div>
-        <div>
-          <h4>Nodal Plane 2</h4>
-          <dl>
-            <dt>Strike</dt><dd>${fmtNum(detail.mt_np2_strike)}&deg;</dd>
-            <dt>Dip</dt><dd>${fmtNum(detail.mt_np2_dip)}&deg;</dd>
-            <dt>Rake</dt><dd>${fmtNum(detail.mt_np2_rake)}&deg;</dd>
-          </dl>
-        </div>
+        ${planeInterpretation("Nodal Plane 1", detail.mt_np1_strike, detail.mt_np1_dip, detail.mt_np1_rake)}
+        ${planeInterpretation("Nodal Plane 2", detail.mt_np2_strike, detail.mt_np2_dip, detail.mt_np2_rake)}
       </div>
       ${beachball}
     </div>
+    <p class="empty-note">Nodal-plane ambiguity: the tensor alone can't say which plane is the actual fault and which is the mathematical auxiliary plane &mdash; that needs geological or aftershock context. Both interpretations above are equally valid readings of this same solution.</p>
     <dl>
       <dt>Scalar Moment (N&middot;m)</dt><dd>${fmtExp(detail.mt_scalar_moment)}</dd>
       <dt>Percent Double Couple</dt><dd>${detail.mt_percent_double_couple !== null ? fmtNum(detail.mt_percent_double_couple * 100, 1) + "%" : "-"}</dd>
@@ -100,15 +96,14 @@ function tensorSection(detail, quake) {
       <dt>Mrp</dt><dd>${fmtExp(detail.mt_tensor_mrp)}</dd>
       <dt>Mtp</dt><dd>${fmtExp(detail.mt_tensor_mtp)}</dd>
     </dl>
-    <h4>Rupture &amp; Shaking Duration</h4>
+    <h4>Rupture Duration</h4>
     <dl>
       <dt>Rupture Duration (s)</dt><dd>${fmtNum(detail.mt_sourcetime_duration, 1)}</dd>
       <dt>Rise Time (s)</dt><dd>${fmtNum(detail.mt_sourcetime_risetime, 1)}</dd>
       <dt>Decay Time (s)</dt><dd>${fmtNum(detail.mt_sourcetime_decaytime, 1)}</dd>
       <dt>Source Time Function</dt><dd>${detail.mt_sourcetime_type ?? "-"}</dd>
-      <dt title="Dobry, Idriss &amp; Ng (1978) magnitude-duration relation &mdash; rough estimate, not site-specific">Est. Shaking Duration (s)</dt>
-      <dd>${estDuration !== null ? fmtNum(estDuration, 1) + " (estimate)" : "-"}</dd>
     </dl>
+    <p class="empty-note">This is how long the fault itself took to rupture, not how long shaking was felt at any particular city &mdash; felt duration depends heavily on distance from the source and local soil/basin conditions (surface waves and site resonance can extend felt shaking well beyond the rupture time, especially far from the epicenter), so it isn't something derivable from magnitude alone.</p>
   `;
 }
 
@@ -168,15 +163,25 @@ function shakemapSection(detail) {
     : "";
   const officialCount = detail.sm_onland_station_count ?? 0;
   const dyfiCount = detail.sm_onland_dyfi_station_count ?? 0;
+
+  const picked = Shindo.pickOnlandPga(detail);
+  const pickedLabel = picked
+    ? `${fmtNum(picked.pgaG, 3)} <span class="empty-note">(chosen source: ${
+        picked.source === "official" ? `official, ${officialCount} station(s)` : `DYFI, ${dyfiCount} report(s)`
+      })</span>`
+    : `<span class="empty-note">no on-land data available</span>`;
+
   return `
     <dl>
       <dt title="The preferred/official ShakeMap submission's own version counter - bumps each time USGS revises this ShakeMap">ShakeMap Version</dt>
       <dd>v${detail.sm_version ?? "-"}</dd>
       <dt title="The ShakeMap product's own reference point, from the shakemap[] entry - may differ slightly from the origin location">ShakeMap Epicenter</dt>
       <dd>${fmtNum(detail.sm_latitude, 4)}, ${fmtNum(detail.sm_longitude, 4)}</dd>
-      <dt title="Max PGA from real on-land seismic instruments - the authoritative value">Max PGA, on-land, official (g)</dt>
+      <dt title="The headline on-land PGA figure: official if its network has enough stations to be representative, otherwise whichever of official/DYFI reads higher">Max PGA, on-land (g)</dt>
+      <dd>${pickedLabel}</dd>
+      <dt title="Raw max PGA from real on-land seismic instruments, regardless of how many stations reported">&nbsp;&nbsp;&mdash; official (g)</dt>
       <dd>${fmtNum(detail.sm_max_pga_onland, 3)} <span class="empty-note">(${officialCount} station(s))</span></dd>
-      <dt title="Max PGA estimated from on-land 'Did You Feel It?' crowd reports - used only as a fallback/reference">Max PGA, on-land, DYFI (g)</dt>
+      <dt title="Raw max PGA estimated from on-land 'Did You Feel It?' crowd reports">&nbsp;&nbsp;&mdash; DYFI (g)</dt>
       <dd>${fmtNum(detail.sm_max_pga_onland_dyfi, 3)} <span class="empty-note">(${dyfiCount} report(s))</span></dd>
       <dt>Max PGV (cm/s)</dt><dd>${fmtNum(detail.sm_max_pgv, 3)}</dd>
       <dt>Map Status</dt><dd>${detail.sm_map_status ?? "-"}</dd>
@@ -197,7 +202,7 @@ function renderDetail(quake, detail) {
         <h2>${quake.place ?? "Unknown location"}</h2>
         <p class="detail-sub">${formatDateTime(quake.time)} &middot; <a href="${quake.url}" target="_blank" rel="noopener">USGS page</a></p>
       </div>
-      <button id="detail-refresh-btn" title="Force refetch this earthquake's detail data">Refresh this earthquake</button>
+      <button id="detail-refresh-btn" title="Force refetch this earthquake's technical data (moment tensor, ShakeMap) from USGS, even if already cached">Re-fetch Technical Data</button>
     </div>
 
     <section class="detail-block">

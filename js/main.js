@@ -1,7 +1,8 @@
 const statusEl = document.getElementById("status");
 const dbStatusEl = document.getElementById("db-status");
 const daysSelect = document.getElementById("days-select");
-const refreshBtn = document.getElementById("refresh-btn");
+const fetchNewBtn = document.getElementById("fetch-new-btn");
+const refetchAllBtn = document.getElementById("refetch-all-btn");
 const connectExistingBtn = document.getElementById("db-connect-existing");
 const connectNewBtn = document.getElementById("db-connect-new");
 const tabListBtn = document.getElementById("tab-list");
@@ -25,7 +26,8 @@ function setDbStatus(msg) {
 }
 
 function setControlsEnabled(enabled) {
-  refreshBtn.disabled = !enabled;
+  fetchNewBtn.disabled = !enabled;
+  refetchAllBtn.disabled = !enabled;
   daysSelect.disabled = !enabled;
 }
 
@@ -72,17 +74,17 @@ function wireDetailRefreshButton() {
   const btn = document.getElementById("detail-refresh-btn");
   if (!btn) return;
   btn.addEventListener("click", () => {
-    if (selectedId) refreshSingleDetail(selectedId);
+    if (selectedId) refetchSingleDetail(selectedId);
   });
 }
 
-// The one exception to "no fetching outside load/Refresh All": an explicit,
-// deliberate click on a specific earthquake's own refresh button.
-async function refreshSingleDetail(id) {
+// The one exception to "no fetching outside Fetch New/Re-fetch All": an
+// explicit, deliberate click on a specific earthquake's own refetch button.
+async function refetchSingleDetail(id) {
   const quake = currentQuakes.find((q) => q.id === id);
   if (!quake) return;
   document.getElementById("detail-refresh-btn")?.setAttribute("disabled", "true");
-  setDbStatus("Refetching earthquake detail...");
+  setDbStatus("Re-fetching earthquake detail...");
   try {
     const fetched = await UsgsApi.fetchDetail(quake.detail_url || quake.id);
     await EqDb.upsertDetail(id, fetched);
@@ -115,11 +117,17 @@ async function runWithConcurrency(items, limit, worker) {
 }
 
 // Fetches and caches moment-tensor/ShakeMap detail for every row that needs
-// it (missing, or stamped with an older detail_schema_version), so Shindo/
-// MMI/PGA are already sitting in the DB by the time anyone clicks a row -
-// no more "click to compute" lazy fetch.
-async function syncAllDetails(rows, { force = false } = {}) {
-  const toFetch = force ? rows : rows.filter((r) => EqDb.needsDetailRefresh(EqDb.getDetail(r.id)));
+// it, so Shindo/MMI/PGA are already sitting in the DB by the time anyone
+// clicks a row - no more "click to compute" lazy fetch. A row needs it when:
+// force=true (Re-fetch All - always refetch everything), OR it's brand new /
+// USGS revised it since we last saw it (in changedIds), OR it's stamped with
+// an older detail_schema_version (this app's own field additions). An
+// existing, unchanged earthquake whose detail we already have is left alone
+// - that's what keeps Fetch New from flooding USGS on every run.
+async function syncAllDetails(rows, { force = false, changedIds = new Set() } = {}) {
+  const toFetch = force
+    ? rows
+    : rows.filter((r) => changedIds.has(r.id) || EqDb.needsDetailRefresh(EqDb.getDetail(r.id)));
   if (toFetch.length === 0) return;
 
   let done = 0;
@@ -141,18 +149,22 @@ async function syncAllDetails(rows, { force = false } = {}) {
 async function fullSync({ force = false } = {}) {
   if (!dbReady) return;
   setControlsEnabled(false);
-  statusEl.textContent = force ? "Refreshing earthquake list..." : "Checking for new earthquakes...";
+  statusEl.textContent = force ? "Re-fetching earthquake list..." : "Checking for new/updated earthquakes...";
 
   try {
     const fetched = await UsgsApi.fetchSummary(SYNC_DAYS);
     const existingIds = new Set(EqDb.getEarthquakes(0).map((e) => e.id));
+    const changedIds = new Set();
     let inserted = 0;
     let updated = 0;
     for (const q of fetched) {
       const existedBefore = existingIds.has(q.id);
       const changed = await EqDb.upsertEarthquake(q, { force, skipPersist: true });
-      if (changed && !existedBefore) inserted++;
-      else if (changed) updated++;
+      if (changed) {
+        changedIds.add(q.id);
+        if (existedBefore) updated++;
+        else inserted++;
+      }
     }
     if (inserted + updated > 0) await EqDb.persist();
 
@@ -161,7 +173,7 @@ async function fullSync({ force = false } = {}) {
 
     const sinceSyncMs = Date.now() - SYNC_DAYS * 24 * 60 * 60 * 1000;
     const allRows = EqDb.getEarthquakes(sinceSyncMs);
-    await syncAllDetails(allRows, { force });
+    await syncAllDetails(allRows, { force, changedIds });
 
     renderFromDb();
     statusEl.textContent = `${currentQuakes.length} earthquake(s) in view (+${inserted} new, ${updated} updated). Details up to date.`;
@@ -223,7 +235,8 @@ EqMap.initMap();
 setControlsEnabled(false);
 initDbUi();
 
-refreshBtn.addEventListener("click", () => fullSync({ force: true }));
+fetchNewBtn.addEventListener("click", () => fullSync({ force: false }));
+refetchAllBtn.addEventListener("click", () => fullSync({ force: true }));
 daysSelect.addEventListener("change", () => renderFromDb());
 tabListBtn.addEventListener("click", () => switchTab("list"));
 tabDetailBtn.addEventListener("click", () => switchTab("detail"));
