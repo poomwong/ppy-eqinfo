@@ -163,7 +163,8 @@ button:hover {
   border-color: var(--accent);
 }
 
-#status {
+#status,
+#db-status {
   color: var(--muted);
   font-size: 0.85rem;
 }
@@ -275,24 +276,6 @@ footer {
   font-size: 0.8rem;
   padding: 1.5rem;
   border-top: 1px solid var(--border);
-}
-
-/* DB connection bar */
-
-#db-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-  padding: 0.75rem 1rem;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-#db-status {
-  color: var(--muted);
-  font-size: 0.85rem;
 }
 
 /* Tabs */

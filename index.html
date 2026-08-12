@@ -15,11 +15,6 @@
 </header>
 
 <main>
-  <section id="db-bar">
-    <span id="db-status">Loading local database...</span>
-    <button id="db-export-btn" title="Download the current local database as a portable eqinfo.sqlite file - useful for backups or moving data to another browser/device">Export .sqlite</button>
-  </section>
-
   <section id="controls">
     <label for="days-select">Time range:</label>
     <select id="days-select">
@@ -46,7 +41,9 @@
         <button id="location-apply-btn">Apply</button>
       </div>
     </div>
+    <button id="db-export-btn" title="Download the current local database as a portable eqinfo.sqlite file - useful for backups or moving data to another browser/device">Export .sqlite</button>
     <span id="status"></span>
+    <span id="db-status"></span>
   </section>
 
   <section id="lookup-bar">
