@@ -10,6 +10,9 @@ const connectNewBtn = document.getElementById("db-connect-new");
 const reconnectBtn = document.getElementById("db-reconnect");
 const tabListBtn = document.getElementById("tab-list");
 const tabDetailBtn = document.getElementById("tab-detail");
+const lookupInput = document.getElementById("lookup-input");
+const lookupBtn = document.getElementById("lookup-btn");
+const lookupStatusEl = document.getElementById("lookup-status");
 const listSection = document.getElementById("list-section-wrap");
 const detailSection = document.getElementById("detail-section");
 
@@ -118,8 +121,7 @@ function switchTab(tab) {
 // currently selected day range and redraw the list/map/detail panel.
 // Never touches the network.
 function renderFromDb() {
-  const days = Number(daysSelect.value);
-  const sinceMs = Date.now() - days * 24 * 60 * 60 * 1000;
+  const sinceMs = daysSelect.value === "all" ? 0 : Date.now() - Number(daysSelect.value) * 24 * 60 * 60 * 1000;
   currentQuakes = EqDb.getEarthquakes(sinceMs);
   sortCurrentQuakes();
   updateSortIndicators();
@@ -174,6 +176,38 @@ async function refetchSingleDetail(id) {
   if (selectedId === id) {
     EqUi.renderDetail(quake, EqDb.getDetail(id));
     wireDetailRefreshButton();
+  }
+}
+
+// Looks up one specific earthquake by USGS event ID and saves it through the
+// normal flow (upsertEarthquake + fetchDetail/upsertDetail), regardless of
+// magnitude or age - this is how events older than SYNC_DAYS (or below the
+// M6.0 summary-feed filter) get into the database at all. Fetch New/Re-fetch
+// All never touch it again afterward since it falls outside their 365-day
+// window; only this lookup (re-entering the same ID) or its own per-event
+// "Re-fetch Technical Data" button will ever refresh it.
+async function lookupEvent(id) {
+  const trimmedId = id.trim();
+  if (!trimmedId) return;
+  lookupBtn.disabled = true;
+  lookupStatusEl.textContent = `Looking up ${trimmedId}...`;
+  try {
+    const quake = await UsgsApi.fetchEventById(trimmedId);
+    await EqDb.upsertEarthquake(quake, { force: true });
+    lookupStatusEl.textContent = `Found: ${quake.place ?? trimmedId} (M${quake.mag}). Fetching technical details...`;
+    const fetched = await UsgsApi.fetchDetail(quake.detailUrl || quake.id);
+    await EqDb.upsertDetail(quake.id, fetched);
+    lookupStatusEl.textContent = `Saved: ${quake.place ?? trimmedId}`;
+    // Switch to "All time" so the looked-up event is guaranteed visible even
+    // if it's older than the currently selected day range.
+    daysSelect.value = "all";
+    renderFromDb();
+    selectQuake(quake.id);
+  } catch (err) {
+    lookupStatusEl.textContent = `Error: ${err.message}`;
+    console.error(err);
+  } finally {
+    lookupBtn.disabled = false;
   }
 }
 
@@ -343,3 +377,8 @@ timeToggleBtn.addEventListener("click", () => {
   renderFromDb();
 });
 updateTimeToggleUi();
+
+lookupBtn.addEventListener("click", () => lookupEvent(lookupInput.value));
+lookupInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") lookupEvent(lookupInput.value);
+});

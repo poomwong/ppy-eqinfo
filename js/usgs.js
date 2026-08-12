@@ -32,7 +32,11 @@ function normalizeFeature(f) {
     magType: p.magType,
     place: p.place,
     url: p.url,
-    detailUrl: p.detail,
+    // The bulk summary feed includes properties.detail (a self-link to the
+    // single-event query), but a single-event query response omits it -
+    // there's nothing to "drill down" to when you're already at that level.
+    // Reconstruct the same URL shape so both paths behave identically.
+    detailUrl: p.detail ?? `${USGS_ENDPOINT}?eventid=${f.id}&format=geojson`,
     status: p.status,
     tsunami: p.tsunami,
     sig: p.sig,
@@ -48,6 +52,15 @@ async function fetchSummary(days) {
   if (!res.ok) throw new Error(`USGS summary request failed: ${res.status}`);
   const data = await res.json();
   return data.features.map(normalizeFeature);
+}
+
+// A single-event query (?eventid=X) returns one GeoJSON Feature directly,
+// not a FeatureCollection - unlike fetchSummary's array response.
+async function fetchEventById(id) {
+  const res = await fetch(`${USGS_ENDPOINT}?eventid=${encodeURIComponent(id)}&format=geojson`);
+  if (!res.ok) throw new Error(`Event "${id}" not found (USGS returned ${res.status})`);
+  const data = await res.json();
+  return normalizeFeature(data);
 }
 
 function parseMomentTensor(product) {
@@ -167,4 +180,4 @@ async function fetchDetail(idOrUrl) {
   };
 }
 
-window.UsgsApi = { MIN_MAGNITUDE, fetchSummary, fetchDetail };
+window.UsgsApi = { MIN_MAGNITUDE, fetchSummary, fetchEventById, fetchDetail };

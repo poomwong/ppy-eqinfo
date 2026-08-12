@@ -53,6 +53,33 @@ main {
   font-size: 0.9rem;
 }
 
+#lookup-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+#lookup-bar label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+#lookup-input {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.9rem;
+  width: 180px;
+}
+
+#lookup-status {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 select, button {
   background: var(--panel);
   color: var(--text);

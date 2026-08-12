@@ -262,7 +262,7 @@ function renderDetail(quake, detail) {
     <div class="detail-header">
       <div>
         <h2>${quake.place ?? "Unknown location"}</h2>
-        <p class="detail-sub">${formatDateTime(quake.time)} &middot; <a href="${quake.url}" target="_blank" rel="noopener">USGS page</a></p>
+        <p class="detail-sub">${formatDateTime(quake.time)} &middot; <a href="${quake.url}" target="_blank" rel="noopener">USGS page</a> &middot; <a href="${quake.detail_url}" target="_blank" rel="noopener" title="Raw USGS API JSON for this event">Raw Info</a></p>
       </div>
       <button id="detail-refresh-btn" title="Force refetch this earthquake's technical data (moment tensor, ShakeMap) from USGS, even if already cached">Re-fetch Technical Data</button>
     </div>
