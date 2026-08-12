@@ -37,23 +37,32 @@ function tensorSection(detail) {
   if (!detail || !detail.has_moment_tensor) {
     return `<p class="empty-note">No moment tensor solution available for this event.</p>`;
   }
+  const hasPlanes =
+    detail.mt_np1_strike !== null && detail.mt_np1_dip !== null &&
+    detail.mt_np2_strike !== null && detail.mt_np2_dip !== null;
+  const beachball = hasPlanes
+    ? `<canvas id="beachball-canvas" class="beachball" width="160" height="160"></canvas>`
+    : "";
   return `
-    <div class="grid-2">
-      <div>
-        <h4>Nodal Plane 1</h4>
-        <dl>
-          <dt>Strike</dt><dd>${fmtNum(detail.mt_np1_strike)}&deg;</dd>
-          <dt>Dip</dt><dd>${fmtNum(detail.mt_np1_dip)}&deg;</dd>
-          <dt>Rake</dt><dd>${fmtNum(detail.mt_np1_rake)}&deg;</dd>
-        </dl>
-      </div>
-      <div>
-        <h4>Nodal Plane 2</h4>
-        <dl>
-          <dt>Strike</dt><dd>${fmtNum(detail.mt_np2_strike)}&deg;</dd>
-          <dt>Dip</dt><dd>${fmtNum(detail.mt_np2_dip)}&deg;</dd>
-          <dt>Rake</dt><dd>${fmtNum(detail.mt_np2_rake)}&deg;</dd>
-        </dl>
+    <div class="tensor-layout">
+      ${beachball}
+      <div class="grid-2">
+        <div>
+          <h4>Nodal Plane 1</h4>
+          <dl>
+            <dt>Strike</dt><dd>${fmtNum(detail.mt_np1_strike)}&deg;</dd>
+            <dt>Dip</dt><dd>${fmtNum(detail.mt_np1_dip)}&deg;</dd>
+            <dt>Rake</dt><dd>${fmtNum(detail.mt_np1_rake)}&deg;</dd>
+          </dl>
+        </div>
+        <div>
+          <h4>Nodal Plane 2</h4>
+          <dl>
+            <dt>Strike</dt><dd>${fmtNum(detail.mt_np2_strike)}&deg;</dd>
+            <dt>Dip</dt><dd>${fmtNum(detail.mt_np2_dip)}&deg;</dd>
+            <dt>Rake</dt><dd>${fmtNum(detail.mt_np2_rake)}&deg;</dd>
+          </dl>
+        </div>
       </div>
     </div>
     <dl>
@@ -75,6 +84,20 @@ function tensorSection(detail) {
   `;
 }
 
+function shindoBadge(detail) {
+  const shindo = detail?.sm_max_pga != null ? Shindo.computeShindoFromPgaG(detail.sm_max_pga) : null;
+  if (!shindo) {
+    return `<div class="intensity-badge"><span class="intensity-label">SHINDO</span><span class="intensity-value">-</span></div>`;
+  }
+  return `
+    <div class="intensity-badge">
+      <img class="shindo-icon" src="${shindo.iconPath}" alt="Shindo ${shindo.label}">
+      <span class="intensity-label">SHINDO</span>
+      <span class="intensity-value">${shindo.label}</span>
+    </div>
+  `;
+}
+
 function shakemapSection(detail) {
   if (!detail || !detail.has_shakemap) {
     return `<p class="empty-note">No ShakeMap available for this event.</p>`;
@@ -83,9 +106,15 @@ function shakemapSection(detail) {
     ? `<img class="shakemap-img" src="${detail.sm_intensity_image_url}" alt="ShakeMap intensity" loading="lazy">`
     : "";
   return `
+    <div class="intensity-row">
+      ${shindoBadge(detail)}
+      <div class="intensity-badge">
+        <span class="intensity-label">MMI</span>
+        <span class="intensity-value">${fmtNum(detail.sm_max_mmi, 1)}</span>
+      </div>
+    </div>
     <dl>
-      <dt>Max Intensity (MMI)</dt><dd>${fmtNum(detail.sm_max_mmi, 1)}</dd>
-      <dt>Max PGA (%g)</dt><dd>${fmtNum(detail.sm_max_pga, 3)}</dd>
+      <dt>Max PGA (g)</dt><dd>${fmtNum(detail.sm_max_pga, 3)}</dd>
       <dt>Max PGV (cm/s)</dt><dd>${fmtNum(detail.sm_max_pgv, 3)}</dd>
       <dt>Version</dt><dd>${detail.sm_version ?? "-"}</dd>
       <dt>Map Status</dt><dd>${detail.sm_map_status ?? "-"}</dd>
@@ -134,6 +163,17 @@ function renderDetail(quake, detail) {
 
     <p class="fetched-note">${fetchedNote}</p>
   `;
+
+  const canvas = document.getElementById("beachball-canvas");
+  if (canvas && detail?.has_moment_tensor) {
+    Beachball.drawBeachball(
+      canvas,
+      detail.mt_np1_strike,
+      detail.mt_np1_dip,
+      detail.mt_np2_strike,
+      detail.mt_np2_dip
+    );
+  }
 }
 
 window.EqUi = { renderTable, renderDetail, formatDateTime };

@@ -300,3 +300,53 @@ dd {
   border: 1px solid var(--border);
   margin-top: 0.75rem;
 }
+
+.tensor-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.tensor-layout .grid-2 {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.beachball {
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.intensity-row {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.intensity-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #1d222a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+}
+
+.shindo-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.intensity-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.intensity-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
