@@ -214,6 +214,7 @@ async function upsertEarthquake(q, { force = false, skipPersist = false } = {}) 
 function getEarthquakes(sinceMs) {
   return all(
     `SELECT e.*, d.has_shakemap AS d_has_shakemap, d.sm_max_pga_onland AS d_sm_max_pga_onland,
+            d.sm_onland_station_count AS d_sm_onland_station_count,
             d.sm_max_pga_onland_dyfi AS d_sm_max_pga_onland_dyfi, d.sm_max_mmi AS d_sm_max_mmi
      FROM earthquakes e
      LEFT JOIN earthquake_details d ON d.id = e.id

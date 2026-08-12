@@ -45,14 +45,32 @@ function computeShindoFromPgaG(pgaG) {
   return { pgaGal, label, iconPath: SHINDO_ICONS[label] };
 }
 
-// Prefers the official (real seismic instrument) on-land PGA; falls back to
-// the DYFI ("Did You Feel It?") crowd-sourced estimate when no instrument
-// reading is available. Returns null if neither exists.
+// An "official" (real seismic instrument) network is only trustworthy on
+// its own once it has a reasonable number of stations reporting. A couple
+// of distant official stations can badly under-represent near-source
+// shaking (seen on a real M7.4: 2 official stations read 0.02g while 49
+// on-land DYFI reports read 0.39g, against a USGS-reported MMI of ~8) - in
+// that case the larger, more geographically relevant DYFI sample is the
+// better estimate, even though it's crowd-sourced rather than instrumental.
+const MIN_RELIABLE_OFFICIAL_STATIONS = 5;
+
+// Picks the best available on-land PGA reading, preferring the official
+// network only when it has enough stations to be representative; otherwise
+// falls back to whichever of official/DYFI is higher. Returns null if
+// neither is available.
 function pickOnlandPga(row) {
-  const officialG = row?.sm_max_pga_onland ?? row?.d_sm_max_pga_onland;
-  if (officialG != null) return { pgaG: officialG, source: "official" };
-  const dyfiG = row?.sm_max_pga_onland_dyfi ?? row?.d_sm_max_pga_onland_dyfi;
+  const officialG = row?.sm_max_pga_onland ?? row?.d_sm_max_pga_onland ?? null;
+  const officialCount = row?.sm_onland_station_count ?? row?.d_sm_onland_station_count ?? 0;
+  const dyfiG = row?.sm_max_pga_onland_dyfi ?? row?.d_sm_max_pga_onland_dyfi ?? null;
+
+  if (officialG != null && officialCount >= MIN_RELIABLE_OFFICIAL_STATIONS) {
+    return { pgaG: officialG, source: "official" };
+  }
+  if (officialG != null && dyfiG != null) {
+    return officialG >= dyfiG ? { pgaG: officialG, source: "official" } : { pgaG: dyfiG, source: "dyfi" };
+  }
   if (dyfiG != null) return { pgaG: dyfiG, source: "dyfi" };
+  if (officialG != null) return { pgaG: officialG, source: "official" };
   return null;
 }
 
