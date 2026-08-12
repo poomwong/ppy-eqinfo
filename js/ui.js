@@ -217,6 +217,56 @@ function mmiBadge(detail) {
   `;
 }
 
+const LONG_PERIOD_ICONS = {
+  1: "icons/longperiod/lp-1.svg",
+  2: "icons/longperiod/lp-2.svg",
+  3: "icons/longperiod/lp-3.svg",
+  4: "icons/longperiod/lp-4.svg",
+};
+
+const BANGKOK_DEFAULT = { lat: 13.7563, lon: 100.5018 };
+
+// Estimated MMI + JMA long-period class at an arbitrary location (default
+// Bangkok), from magnitude + distance alone - no ShakeMap data involved, so
+// this is shown for every earthquake with a known epicenter, not just ones
+// with ShakeMap. Hidden entirely when the estimate rounds to MMI 0 (not
+// felt) at that distance, to avoid cluttering every row with a null result.
+function localEstimateBadges(quake, targetLocation) {
+  if (!targetLocation || quake.mag == null || quake.latitude == null || quake.longitude == null) return "";
+  const estimate = LocalEstimate.estimateLocal(
+    { mag: quake.mag, latitude: quake.latitude, longitude: quake.longitude, depth: quake.depth },
+    { lat: targetLocation.lat, lon: targetLocation.lon },
+    targetLocation.amplify
+  );
+  if (!estimate || Math.round(estimate.mmi) < 1) return "";
+
+  const isBangkokDefault = targetLocation.lat === BANGKOK_DEFAULT.lat && targetLocation.lon === BANGKOK_DEFAULT.lon;
+  const locLabel = isBangkokDefault ? "Bangkok" : `${estimate.repiKm.toFixed(0)}km site`;
+  const amplifyNote = targetLocation.amplify ? ", with Bangkok basin amplification applied" : "";
+
+  const [bg, fg] = mmiColors(estimate.mmi);
+  const localMmi = `
+    <div class="intensity-badge" style="background:${bg};color:${fg};border-color:${bg}"
+         title="Estimated from magnitude + epicentral distance (${estimate.repiKm.toFixed(0)}km to ${locLabel}) via the Allen, Wald &amp; Worden (2012) IPE${amplifyNote} - NOT derived from ShakeMap data, a rough estimate only">
+      <span class="intensity-label" style="color:${fg}">MMI @ ${locLabel}</span>
+      <span class="intensity-value">${mmiRoman(estimate.mmi)}</span>
+    </div>
+  `;
+
+  const longPeriod =
+    estimate.longPeriodClass > 0
+      ? `
+    <div class="intensity-badge" title="Estimated JMA long-period ground motion class (~${estimate.longPeriodKine.toFixed(1)} kine estimated) - a rough estimate derived from the local MMI estimate, not JMA's actual computed grade">
+      <img class="shindo-icon" src="${LONG_PERIOD_ICONS[estimate.longPeriodClass]}" alt="Long-period class ${estimate.longPeriodClass}">
+      <span class="intensity-label">LONG PERIOD</span>
+      <span class="intensity-value">${estimate.longPeriodClass}</span>
+    </div>
+  `
+      : "";
+
+  return localMmi + longPeriod;
+}
+
 function shakemapSection(detail) {
   if (!detail || !detail.has_shakemap) {
     return `<p class="empty-note">No ShakeMap available for this event.</p>`;
@@ -252,7 +302,7 @@ function shakemapSection(detail) {
   `;
 }
 
-function renderDetail(quake, detail) {
+function renderDetail(quake, detail, targetLocation) {
   const panel = document.getElementById("detail-panel");
   const fetchedNote = detail?.detail_fetched_at
     ? `Detail last fetched ${formatDateTime(detail.detail_fetched_at)}`
@@ -272,6 +322,7 @@ function renderDetail(quake, detail) {
       <div class="intensity-row">
         ${shindoBadge(detail)}
         ${mmiBadge(detail)}
+        ${localEstimateBadges(quake, targetLocation)}
       </div>
       <dl>
         <dt>USGS Event ID</dt><dd>${quake.id ?? "-"}</dd>

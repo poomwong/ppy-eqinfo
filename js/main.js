@@ -15,6 +15,17 @@ const lookupBtn = document.getElementById("lookup-btn");
 const lookupStatusEl = document.getElementById("lookup-status");
 const listSection = document.getElementById("list-section-wrap");
 const detailSection = document.getElementById("detail-section");
+const locationToggleBtn = document.getElementById("location-toggle-btn");
+const locationPopup = document.getElementById("location-popup");
+const locationLatInput = document.getElementById("location-lat");
+const locationLonInput = document.getElementById("location-lon");
+const locationAmplifyInput = document.getElementById("location-amplify");
+const locationApplyBtn = document.getElementById("location-apply-btn");
+
+// Target location for the local MMI / long-period estimate on the detail
+// page. In-memory only (like sort state) - resets to the Bangkok default on
+// reload rather than being persisted, since it wasn't asked to be.
+let targetLocation = { lat: 13.7563, lon: 100.5018, amplify: false };
 
 // The network sync (page load / "Refresh All") always pulls the widest
 // available window, regardless of which range is selected in the dropdown -
@@ -131,7 +142,7 @@ function renderFromDb() {
   if (selectedId) {
     const stillThere = currentQuakes.find((q) => q.id === selectedId);
     if (stillThere) {
-      EqUi.renderDetail(stillThere, EqDb.getDetail(selectedId));
+      EqUi.renderDetail(stillThere, EqDb.getDetail(selectedId), targetLocation);
     }
   }
 }
@@ -145,7 +156,7 @@ function selectQuake(id) {
   tabDetailBtn.textContent = quake.place ? `Details: ${quake.place}` : "Details";
   switchTab("detail");
 
-  EqUi.renderDetail(quake, EqDb.getDetail(id));
+  EqUi.renderDetail(quake, EqDb.getDetail(id), targetLocation);
   wireDetailRefreshButton();
 }
 
@@ -174,7 +185,7 @@ async function refetchSingleDetail(id) {
     console.error(err);
   }
   if (selectedId === id) {
-    EqUi.renderDetail(quake, EqDb.getDetail(id));
+    EqUi.renderDetail(quake, EqDb.getDetail(id), targetLocation);
     wireDetailRefreshButton();
   }
 }
@@ -382,3 +393,31 @@ lookupBtn.addEventListener("click", () => lookupEvent(lookupInput.value));
 lookupInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") lookupEvent(lookupInput.value);
 });
+
+function updateLocationToggleLabel() {
+  const isBangkokDefault = targetLocation.lat === 13.7563 && targetLocation.lon === 100.5018;
+  locationToggleBtn.textContent = isBangkokDefault
+    ? "Location: Bangkok"
+    : `Location: ${targetLocation.lat.toFixed(2)}, ${targetLocation.lon.toFixed(2)}`;
+}
+
+locationToggleBtn.addEventListener("click", () => {
+  locationPopup.classList.toggle("hidden");
+});
+
+document.addEventListener("click", (e) => {
+  if (!locationPopup.classList.contains("hidden") && !e.target.closest("#location-control")) {
+    locationPopup.classList.add("hidden");
+  }
+});
+
+locationApplyBtn.addEventListener("click", () => {
+  const lat = Number(locationLatInput.value);
+  const lon = Number(locationLonInput.value);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  targetLocation = { lat, lon, amplify: locationAmplifyInput.checked };
+  updateLocationToggleLabel();
+  locationPopup.classList.add("hidden");
+  renderFromDb();
+});
+updateLocationToggleLabel();

@@ -33,6 +33,20 @@
     <button id="fetch-new-btn" title="Check USGS for new or updated earthquakes and fetch technical details only for those - skips events already cached">Fetch New</button>
     <button id="refetch-all-btn" title="Force refetch the full earthquake list and all technical details (moment tensor, ShakeMap) from USGS, even if already cached">Re-fetch All</button>
     <button id="time-toggle-btn" title="Toggle displayed times between UTC and your local timezone - all data is always stored in UTC">Time: UTC</button>
+    <div id="location-control">
+      <button id="location-toggle-btn" title="Set the location used to estimate local MMI / long-period shaking on the detail page">Location: Bangkok</button>
+      <div id="location-popup" class="hidden">
+        <label for="location-lat">Latitude</label>
+        <input type="number" id="location-lat" step="0.0001" value="13.7563">
+        <label for="location-lon">Longitude</label>
+        <input type="number" id="location-lon" step="0.0001" value="100.5018">
+        <label class="checkbox-label">
+          <input type="checkbox" id="location-amplify">
+          Apply Basin Amplification (Bangkok only)
+        </label>
+        <button id="location-apply-btn">Apply</button>
+      </div>
+    </div>
     <span id="status"></span>
   </section>
 
@@ -93,6 +107,7 @@
 <script src="js/beachball.js"></script>
 <script src="js/shindo.js"></script>
 <script src="js/faultgeom.js"></script>
+<script src="js/localestimate.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>
 </body>
