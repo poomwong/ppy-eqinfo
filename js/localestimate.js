@@ -32,6 +32,15 @@ function aww12Mmi(mag, rhypoKm) {
   return AWW12.c0 + AWW12.c1 * mag + distanceTerm;
 }
 
+// AWW12 is only validated to 300km per the original paper; the anelastic
+// term (c4, small) is too weak to bring MMI down to ~0 at truly teleseismic
+// range - a M8 at 10,000-20,000km still evaluates to MMI ~1 under the raw
+// formula, which is not physically real. We already extrapolate past 300km
+// deliberately for real cases like Bangkok's basin resonance (~1037km from
+// the 2025 Myanmar quake), so this cutoff is set well beyond that, purely as
+// a sanity bound against nonsensical results at distances nothing is felt.
+const MAX_VALID_DISTANCE_KM = 5000;
+
 // Calibrated against the real 2025 M7.7 Mandalay/Myanmar earthquake
 // (us7000pn9s): AWW12 alone predicts MMI ~3.6 at Bangkok's distance (~1037km
 // epicentral), but on-land DYFI reports near Bangkok (Vs30 ~190-210 m/s, deep
@@ -47,6 +56,15 @@ const BANGKOK_AMPLIFICATION_MMI = 1.5;
 // alone with no waveform data.
 function mmiToApproxPgvCms(mmi) {
   return Math.pow(10, (mmi - 2.35) / 3.47);
+}
+
+// Wald et al. (1999b) PGA-MMI relationship (as reproduced in Sokolov 2013,
+// eq. 1a), inverted the same way, to derive an approximate PGA (gal) for
+// feeding into the existing Shindo calculation - so "local Shindo" reuses
+// the same JMA band table already used for ShakeMap-derived events, rather
+// than a separate ad hoc scale.
+function mmiToApproxPgaGal(mmi) {
+  return Math.pow(10, (mmi + 1.66) / 3.66);
 }
 
 // Bangkok's damage in the 2025 Myanmar earthquake was specifically a long-
@@ -75,22 +93,30 @@ function longPeriodClassFromKine(kine) {
 function estimateLocal(quake, target, applyBangkokAmplification) {
   if (quake.mag == null || quake.latitude == null || quake.longitude == null) return null;
   const repiKm = haversineKm(quake.latitude, quake.longitude, target.lat, target.lon);
+  if (repiKm > MAX_VALID_DISTANCE_KM) return null;
+
   const depthKm = quake.depth ?? 0;
   const rhypoKm = Math.sqrt(repiKm ** 2 + depthKm ** 2);
 
   const baseMmi = aww12Mmi(quake.mag, rhypoKm);
   const mmi = applyBangkokAmplification ? baseMmi + BANGKOK_AMPLIFICATION_MMI : baseMmi;
+  const mmiRounded = Math.round(mmi);
 
   const basePgvCms = mmiToApproxPgvCms(mmi);
   const longPeriodPgvCms = applyBangkokAmplification ? basePgvCms * BANGKOK_LONGPERIOD_MULTIPLIER : basePgvCms;
   const longPeriodClass = longPeriodClassFromKine(longPeriodPgvCms);
 
+  const estimatedPgaGal = mmiToApproxPgaGal(mmi);
+  const estimatedPgaG = estimatedPgaGal / 980.665;
+
   return {
     repiKm,
     rhypoKm,
     mmi,
+    mmiRounded,
     longPeriodKine: longPeriodPgvCms,
     longPeriodClass,
+    estimatedPgaG,
   };
 }
 

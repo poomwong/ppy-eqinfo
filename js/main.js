@@ -22,10 +22,41 @@ const locationLonInput = document.getElementById("location-lon");
 const locationAmplifyInput = document.getElementById("location-amplify");
 const locationApplyBtn = document.getElementById("location-apply-btn");
 
-// Target location for the local MMI / long-period estimate on the detail
-// page. In-memory only (like sort state) - resets to the Bangkok default on
-// reload rather than being persisted, since it wasn't asked to be.
-let targetLocation = { lat: 13.7563, lon: 100.5018, amplify: false };
+const LOCATION_COOKIE = "eqinfo_location";
+const BANGKOK_DEFAULT_LOCATION = { lat: 13.7563, lon: 100.5018, amplify: false };
+
+function readCookie(name) {
+  const match = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function writeCookie(name, value, days) {
+  const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}`;
+}
+
+function loadTargetLocation() {
+  const raw = readCookie(LOCATION_COOKIE);
+  if (!raw) return { ...BANGKOK_DEFAULT_LOCATION };
+  try {
+    const parsed = JSON.parse(raw);
+    if (Number.isFinite(parsed.lat) && Number.isFinite(parsed.lon)) {
+      return { lat: parsed.lat, lon: parsed.lon, amplify: !!parsed.amplify };
+    }
+  } catch {
+    // fall through to default
+  }
+  return { ...BANGKOK_DEFAULT_LOCATION };
+}
+
+function saveTargetLocation() {
+  writeCookie(LOCATION_COOKIE, JSON.stringify(targetLocation), 365);
+}
+
+// Target location for the local MMI / long-period estimate, remembered
+// across sessions via a cookie (like the time-display mode) so it doesn't
+// need re-entering every time the page opens.
+let targetLocation = loadTargetLocation();
 
 // The network sync (page load / "Refresh All") always pulls the widest
 // available window, regardless of which range is selected in the dropdown -
@@ -105,7 +136,7 @@ function wireSortHeaders() {
       }
       sortCurrentQuakes();
       updateSortIndicators();
-      EqUi.renderTable(currentQuakes, (id) => selectQuake(id));
+      EqUi.renderTable(currentQuakes, (id) => selectQuake(id), targetLocation);
     });
   });
 }
@@ -136,7 +167,7 @@ function renderFromDb() {
   currentQuakes = EqDb.getEarthquakes(sinceMs);
   sortCurrentQuakes();
   updateSortIndicators();
-  EqUi.renderTable(currentQuakes, (id) => selectQuake(id));
+  EqUi.renderTable(currentQuakes, (id) => selectQuake(id), targetLocation);
   EqMap.renderMap(currentQuakes, (id) => selectQuake(id));
 
   if (selectedId) {
@@ -395,7 +426,8 @@ lookupInput.addEventListener("keydown", (e) => {
 });
 
 function updateLocationToggleLabel() {
-  const isBangkokDefault = targetLocation.lat === 13.7563 && targetLocation.lon === 100.5018;
+  const isBangkokDefault =
+    targetLocation.lat === BANGKOK_DEFAULT_LOCATION.lat && targetLocation.lon === BANGKOK_DEFAULT_LOCATION.lon;
   locationToggleBtn.textContent = isBangkokDefault
     ? "Location: Bangkok"
     : `Location: ${targetLocation.lat.toFixed(2)}, ${targetLocation.lon.toFixed(2)}`;
@@ -416,8 +448,16 @@ locationApplyBtn.addEventListener("click", () => {
   const lon = Number(locationLonInput.value);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
   targetLocation = { lat, lon, amplify: locationAmplifyInput.checked };
+  saveTargetLocation();
   updateLocationToggleLabel();
   locationPopup.classList.add("hidden");
   renderFromDb();
 });
+
+// Reflect the cookie-restored (or default) location into the popup's inputs
+// so re-opening it shows what's actually active, not the HTML's hardcoded
+// starting values.
+locationLatInput.value = targetLocation.lat;
+locationLonInput.value = targetLocation.lon;
+locationAmplifyInput.checked = targetLocation.amplify;
 updateLocationToggleLabel();

@@ -47,13 +47,21 @@ function reviewInfoIcon(q) {
   return `<span class="info-icon" title="Status: ${q.status} &mdash; not yet human-reviewed by USGS, data may still change">&#9432;</span>`;
 }
 
-function renderTable(quakes, onSelect) {
+function renderTable(quakes, onSelect, targetLocation) {
   const tbody = document.getElementById("eq-table-body");
   tbody.innerHTML = "";
   quakes.forEach((q) => {
     const tr = document.createElement("tr");
     tr.dataset.id = q.id;
     const magClass = q.mag >= 7.0 ? "mag-cell mag-high" : "mag-cell";
+
+    const localEstimate = targetLocation ? computeLocalEstimate(q, targetLocation) : null;
+    const isLocallyFelt = localEstimate && (localEstimate.mmiRounded >= 1 || localEstimate.longPeriodClass > 0);
+    if (isLocallyFelt) {
+      tr.classList.add("locally-felt");
+      tr.title = `Estimated local MMI ${localEstimate.mmiRounded}${localEstimate.longPeriodClass > 0 ? `, long-period class ${localEstimate.longPeriodClass}` : ""} at the configured location`;
+    }
+
     tr.innerHTML = `
       <td>${formatDateTime(q.time)}</td>
       <td>${fmtNum(q.latitude, 3)}, ${fmtNum(q.longitude, 3)}</td>
@@ -231,27 +239,42 @@ const BANGKOK_DEFAULT = { lat: 13.7563, lon: 100.5018 };
 // this is shown for every earthquake with a known epicenter, not just ones
 // with ShakeMap. Hidden entirely when the estimate rounds to MMI 0 (not
 // felt) at that distance, to avoid cluttering every row with a null result.
-function localEstimateBadges(quake, targetLocation) {
-  if (!targetLocation || quake.mag == null || quake.latitude == null || quake.longitude == null) return "";
-  const estimate = LocalEstimate.estimateLocal(
+function computeLocalEstimate(quake, targetLocation) {
+  if (!targetLocation || quake.mag == null || quake.latitude == null || quake.longitude == null) return null;
+  return LocalEstimate.estimateLocal(
     { mag: quake.mag, latitude: quake.latitude, longitude: quake.longitude, depth: quake.depth },
     { lat: targetLocation.lat, lon: targetLocation.lon },
     targetLocation.amplify
   );
-  if (!estimate || Math.round(estimate.mmi) < 1) return "";
+}
+
+function localEstimateBadges(quake, targetLocation) {
+  const estimate = computeLocalEstimate(quake, targetLocation);
+  if (!estimate || estimate.mmiRounded < 1) return "";
 
   const isBangkokDefault = targetLocation.lat === BANGKOK_DEFAULT.lat && targetLocation.lon === BANGKOK_DEFAULT.lon;
   const locLabel = isBangkokDefault ? "Bangkok" : `${estimate.repiKm.toFixed(0)}km site`;
   const amplifyNote = targetLocation.amplify ? ", with Bangkok basin amplification applied" : "";
+  const commonTitle = `Estimated from magnitude + epicentral distance (${estimate.repiKm.toFixed(0)}km to ${locLabel}) via the Allen, Wald &amp; Worden (2012) IPE${amplifyNote} - NOT derived from ShakeMap data, a rough estimate only`;
 
   const [bg, fg] = mmiColors(estimate.mmi);
   const localMmi = `
-    <div class="intensity-badge" style="background:${bg};color:${fg};border-color:${bg}"
-         title="Estimated from magnitude + epicentral distance (${estimate.repiKm.toFixed(0)}km to ${locLabel}) via the Allen, Wald &amp; Worden (2012) IPE${amplifyNote} - NOT derived from ShakeMap data, a rough estimate only">
+    <div class="intensity-badge" style="background:${bg};color:${fg};border-color:${bg}" title="${commonTitle}">
       <span class="intensity-label" style="color:${fg}">MMI @ ${locLabel}</span>
-      <span class="intensity-value">${mmiRoman(estimate.mmi)}</span>
+      <span class="intensity-value">${estimate.mmiRounded}</span>
     </div>
   `;
+
+  const localShindo = Shindo.computeShindoFromPgaG(estimate.estimatedPgaG);
+  const shindoBadgeHtml = localShindo
+    ? `
+    <div class="intensity-badge" title="Estimated Shindo at ${locLabel}, derived from the local MMI estimate above. ${commonTitle}">
+      <img class="shindo-icon" src="${localShindo.iconPath}" alt="Shindo ${localShindo.label}">
+      <span class="intensity-label">SHINDO @ ${locLabel}</span>
+      <span class="intensity-value">${localShindo.label}</span>
+    </div>
+  `
+    : "";
 
   const longPeriod =
     estimate.longPeriodClass > 0
@@ -264,7 +287,7 @@ function localEstimateBadges(quake, targetLocation) {
   `
       : "";
 
-  return localMmi + longPeriod;
+  return localMmi + shindoBadgeHtml + longPeriod;
 }
 
 function shakemapSection(detail) {

@@ -88,7 +88,9 @@ main {
   position: absolute;
   top: calc(100% + 0.4rem);
   left: 0;
-  z-index: 20;
+  /* Leaflet's own panes go up to z-index ~700; well above that so the
+     popup never renders behind the map. */
+  z-index: 10000;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -211,6 +213,15 @@ tbody tr {
 
 tbody tr:hover {
   background: #1c2129;
+}
+
+tbody tr.locally-felt {
+  background: rgba(255, 107, 74, 0.14);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+tbody tr.locally-felt:hover {
+  background: rgba(255, 107, 74, 0.22);
 }
 
 .mag-cell {
