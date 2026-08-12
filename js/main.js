@@ -203,8 +203,31 @@ function cooldownRemainingMs(key, cooldownMs) {
   return Math.max(0, cooldownMs - (Date.now() - last));
 }
 
+// --- Automatic page-load sync gating ---------------------------------
+// The automatic sync that runs on every page open is gated to once per
+// clock hour (not a rolling 60-minute window) - e.g. reloading at 2:05 and
+// again at 2:50 only syncs once, but reloading again at 3:01 syncs again.
+// Manual "Fetch New" clicks are unaffected and always go through, but still
+// count as having synced for the hour (so an auto-reload right after a
+// manual click doesn't redundantly sync again).
+const AUTO_SYNC_HOUR_KEY = "eqinfo_last_auto_sync_hour";
+
+function currentHourBucket() {
+  return Math.floor(Date.now() / (60 * 60 * 1000));
+}
+
+function alreadyAutoSyncedThisHour() {
+  const last = Number(Cookies.readCookie(AUTO_SYNC_HOUR_KEY));
+  return Number.isFinite(last) && last === currentHourBucket();
+}
+
+function markAutoSyncedThisHour() {
+  Cookies.writeCookie(AUTO_SYNC_HOUR_KEY, String(currentHourBucket()));
+}
+
 function markSynced(force) {
   if (force) Cookies.writeCookie(LAST_REFETCH_ALL_KEY, String(Date.now()));
+  markAutoSyncedThisHour();
 }
 
 // --- Status helpers & tabs ------------------------------------------------
@@ -525,7 +548,14 @@ async function initDb() {
     await EqDb.loadDatabase();
     dbReady = true;
     setDbStatus("Ready");
-    await fullSync();
+
+    if (alreadyAutoSyncedThisHour()) {
+      renderFromDb();
+      statusEl.textContent = `${currentQuakes.length} earthquake(s) in view (from cache - already auto-synced this hour; use Fetch New to check again).`;
+      setControlsEnabled(true);
+    } else {
+      await fullSync();
+    }
   } catch (err) {
     setDbStatus(`Failed to load local database: ${err.message}`);
     console.error(err);
