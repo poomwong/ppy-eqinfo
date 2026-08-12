@@ -3,6 +3,8 @@ const dbStatusEl = document.getElementById("db-status");
 const daysSelect = document.getElementById("days-select");
 const fetchNewBtn = document.getElementById("fetch-new-btn");
 const refetchAllBtn = document.getElementById("refetch-all-btn");
+const timeToggleBtn = document.getElementById("time-toggle-btn");
+const timeColHeader = document.getElementById("time-col-header");
 const connectExistingBtn = document.getElementById("db-connect-existing");
 const connectNewBtn = document.getElementById("db-connect-new");
 const reconnectBtn = document.getElementById("db-reconnect");
@@ -253,3 +255,15 @@ refetchAllBtn.addEventListener("click", () => fullSync({ force: true }));
 daysSelect.addEventListener("change", () => renderFromDb());
 tabListBtn.addEventListener("click", () => switchTab("list"));
 tabDetailBtn.addEventListener("click", () => switchTab("detail"));
+
+function updateTimeToggleUi() {
+  const mode = TimeFormat.getMode();
+  timeToggleBtn.textContent = mode === "utc" ? "Time: UTC" : "Time: Local";
+  timeColHeader.textContent = mode === "utc" ? "Date & Time (UTC)" : "Date & Time (Local)";
+}
+timeToggleBtn.addEventListener("click", () => {
+  TimeFormat.toggle();
+  updateTimeToggleUi();
+  renderFromDb();
+});
+updateTimeToggleUi();

@@ -86,11 +86,12 @@ button:hover {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 table {
   width: 100%;
+  min-width: 900px;
   border-collapse: collapse;
   font-size: 0.9rem;
 }
@@ -355,4 +356,33 @@ dd {
 .intensity-value {
   font-size: 1.1rem;
   font-weight: 700;
+}
+
+.alert-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+
+.mmi-chip {
+  display: inline-block;
+  min-width: 1.6rem;
+  text-align: center;
+  padding: 0.1rem 0.4rem;
+  border-radius: 5px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.info-icon {
+  color: var(--accent);
+  margin-right: 0.35rem;
+  cursor: help;
+}
+
+.tsunami-cell {
+  text-align: center;
 }

@@ -1,6 +1,5 @@
 function formatDateTime(ms) {
-  if (ms === null || ms === undefined) return "-";
-  return new Date(ms).toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+  return TimeFormat.format(ms);
 }
 
 function fmtNum(v, digits = 2) {
@@ -19,6 +18,37 @@ function shindoCell(q) {
   return `<img class="shindo-icon shindo-icon-sm" src="${shindo.iconPath}" alt="Shindo ${shindo.label}" title="Shindo ${shindo.label} (USGS reported PGA)">`;
 }
 
+const ALERT_COLORS = { green: "#4CAF50", yellow: "#FDD835", orange: "#FB8C00", red: "#E53935" };
+
+function alertCell(q) {
+  if (!q.alert) return `<span class="empty-note">-</span>`;
+  const color = ALERT_COLORS[q.alert] ?? "#888";
+  return `<span class="alert-dot" style="background:${color}" title="PAGER alert: ${q.alert}"></span>${q.alert}`;
+}
+
+function statusCell(q) {
+  return q.status ?? `<span class="empty-note">-</span>`;
+}
+
+function tsunamiCell(q) {
+  return q.tsunami ? `<span title="Tsunami warning was issued for this event">&#127754;</span>` : "";
+}
+
+function mmiCell(q) {
+  const mmi = q.d_sm_max_mmi;
+  if (mmi === null || mmi === undefined) return `<span class="empty-note">-</span>`;
+  const [bg, fg] = mmiColors(mmi);
+  return `<span class="mmi-chip" style="background:${bg};color:${fg}" title="${fmtNum(mmi, 2)}">${mmiRoman(mmi)}</span>`;
+}
+
+// A quick visual flag for events USGS hasn't human-reviewed yet - the
+// automatically-generated data (magnitude, location, ShakeMap) can still
+// change once reviewed.
+function reviewInfoIcon(q) {
+  if (!q.status || q.status.toLowerCase() === "reviewed") return "";
+  return `<span class="info-icon" title="Status: ${q.status} &mdash; not yet human-reviewed by USGS, data may still change">&#9432;</span>`;
+}
+
 function renderTable(quakes, onSelect) {
   const tbody = document.getElementById("eq-table-body");
   tbody.innerHTML = "";
@@ -27,10 +57,14 @@ function renderTable(quakes, onSelect) {
     tr.dataset.id = q.id;
     const magClass = q.mag >= 7.0 ? "mag-cell mag-high" : "mag-cell";
     tr.innerHTML = `
-      <td>${formatDateTime(q.time)}</td>
+      <td>${reviewInfoIcon(q)}${formatDateTime(q.time)}</td>
       <td>${fmtNum(q.latitude, 3)}, ${fmtNum(q.longitude, 3)}</td>
       <td class="${magClass}">${fmtNum(q.mag, 1)}</td>
       <td>${q.place ?? "Unknown"}</td>
+      <td>${alertCell(q)}</td>
+      <td>${statusCell(q)}</td>
+      <td class="tsunami-cell">${tsunamiCell(q)}</td>
+      <td>${mmiCell(q)}</td>
       <td>${shindoCell(q)}</td>
       <td><a href="${q.url}" target="_blank" rel="noopener" class="row-link">USGS &rarr;</a></td>
     `;
@@ -157,13 +191,26 @@ function mmiColors(mmi) {
   return ["#6A1B9A", "#fff"];
 }
 
+// MMI is conventionally expressed in Roman numerals, rounded to the nearest
+// whole grade - the underlying ShakeMap value is a continuous estimate, but
+// the scale itself (I-XII) isn't.
+const MMI_ROMAN = ["0", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+
+function mmiRoman(mmi) {
+  if (mmi === null || mmi === undefined || Number.isNaN(mmi)) return "-";
+  const rounded = Math.round(mmi);
+  if (rounded < 0) return MMI_ROMAN[0];
+  if (rounded >= MMI_ROMAN.length) return "XII+";
+  return MMI_ROMAN[rounded];
+}
+
 function mmiBadge(detail) {
   const mmi = detail?.sm_max_mmi ?? null;
   const [bg, fg] = mmiColors(mmi);
   return `
-    <div class="intensity-badge" style="background:${bg};color:${fg};border-color:${bg}">
+    <div class="intensity-badge" style="background:${bg};color:${fg};border-color:${bg}" title="${fmtNum(mmi, 2)}">
       <span class="intensity-label" style="color:${fg}">MMI</span>
-      <span class="intensity-value">${fmtNum(mmi, 1)}</span>
+      <span class="intensity-value">${mmiRoman(mmi)}</span>
     </div>
   `;
 }
@@ -229,6 +276,7 @@ function renderDetail(quake, detail) {
         <dt>Magnitude</dt><dd>${fmtNum(quake.mag, 1)} ${quake.mag_type ?? ""}</dd>
         <dt>Depth (km)</dt><dd>${fmtNum(quake.depth, 1)}</dd>
         <dt>Coordinates</dt><dd>${fmtNum(quake.latitude, 4)}, ${fmtNum(quake.longitude, 4)}</dd>
+        <dt>MMI</dt><dd title="${fmtNum(detail?.sm_max_mmi, 2)}">${mmiRoman(detail?.sm_max_mmi ?? null)}</dd>
         <dt>Status</dt><dd>${quake.status ?? "-"}</dd>
         <dt>Alert Level</dt><dd>${quake.alert ?? "-"}</dd>
         <dt>Significance</dt><dd>${quake.sig ?? "-"}</dd>

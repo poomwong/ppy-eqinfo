@@ -25,7 +25,7 @@ function renderMap(quakes, onSelect) {
       fillOpacity: 0.5,
     });
     marker.bindPopup(
-      `<strong>M ${q.mag.toFixed(1)}</strong> &mdash; ${q.place}<br>${new Date(q.time).toISOString()}`
+      `<strong>M ${q.mag.toFixed(1)}</strong> &mdash; ${q.place}<br>${TimeFormat.format(q.time)}`
     );
     marker.on("click", () => onSelect(q.id));
     marker.addTo(markersLayer);
