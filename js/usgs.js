@@ -97,17 +97,36 @@ function parseShakemap(product) {
 // which nobody actually feels. The station list only contains points where
 // a seismic instrument or a "Did You Feel It?" report exists — i.e. places
 // people actually are — so its max is a much better proxy for on-land shaking.
-async function fetchOnlandMaxPga(stationListUrl) {
-  if (!stationListUrl) return { maxPgaOnland: null, onlandStationCount: 0 };
+// Official (real instrument) and DYFI (crowd-sourced) readings are tracked
+// separately: official is the authoritative value, DYFI is a fallback/reference
+// for events too remote to have real station coverage.
+async function fetchOnlandPgaStats(stationListUrl) {
+  const empty = {
+    officialMaxPga: null,
+    officialStationCount: 0,
+    dyfiMaxPga: null,
+    dyfiStationCount: 0,
+  };
+  if (!stationListUrl) return empty;
   const res = await fetch(stationListUrl);
-  if (!res.ok) return { maxPgaOnland: null, onlandStationCount: 0 };
+  if (!res.ok) return empty;
   const data = await res.json();
-  const pgasPercentG = (data.features || [])
-    .map((f) => f.properties?.pga)
-    .filter((v) => typeof v === "number" && Number.isFinite(v));
-  if (pgasPercentG.length === 0) return { maxPgaOnland: null, onlandStationCount: 0 };
-  const maxPercentG = Math.max(...pgasPercentG);
-  return { maxPgaOnland: maxPercentG / 100, onlandStationCount: pgasPercentG.length };
+
+  const officialPgas = [];
+  const dyfiPgas = [];
+  for (const f of data.features || []) {
+    const pga = f.properties?.pga;
+    if (typeof pga !== "number" || !Number.isFinite(pga)) continue;
+    const isDyfi = (f.properties?.network || "").toUpperCase() === "DYFI";
+    (isDyfi ? dyfiPgas : officialPgas).push(pga);
+  }
+
+  return {
+    officialMaxPga: officialPgas.length ? Math.max(...officialPgas) / 100 : null,
+    officialStationCount: officialPgas.length,
+    dyfiMaxPga: dyfiPgas.length ? Math.max(...dyfiPgas) / 100 : null,
+    dyfiStationCount: dyfiPgas.length,
+  };
 }
 
 async function fetchDetail(idOrUrl) {
@@ -121,9 +140,11 @@ async function fetchDetail(idOrUrl) {
 
   const sm = smProduct ? parseShakemap(smProduct) : null;
   if (sm) {
-    const { maxPgaOnland, onlandStationCount } = await fetchOnlandMaxPga(sm.stationListUrl);
-    sm.maxPgaOnland = maxPgaOnland;
-    sm.onlandStationCount = onlandStationCount;
+    const stats = await fetchOnlandPgaStats(sm.stationListUrl);
+    sm.officialMaxPgaOnland = stats.officialMaxPga;
+    sm.officialOnlandStationCount = stats.officialStationCount;
+    sm.dyfiMaxPgaOnland = stats.dyfiMaxPga;
+    sm.dyfiOnlandStationCount = stats.dyfiStationCount;
   }
 
   return {

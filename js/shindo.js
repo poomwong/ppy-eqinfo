@@ -13,36 +13,47 @@ const SHINDO_ICONS = {
   "7": "icons/shindo/shindo-7.svg",
 };
 
-// Karim & Yamazaki (2002) empirical fit of JMA instrumental seismic
-// intensity from peak ground acceleration.
-function instrumentalIntensityFromPgaGal(pgaGal) {
-  if (pgaGal === null || pgaGal === undefined || pgaGal <= 0) return null;
-  if (pgaGal < 300) return 2.001 * Math.log10(pgaGal) + 0.94;
-  return 2.432 * Math.log10(pgaGal) - 1.83;
-}
+// Standard rough-guide correspondence between peak ground acceleration (gal)
+// and JMA seismic intensity (Shindo). Each entry's max is exclusive.
+const SHINDO_GAL_BANDS = [
+  { max: 0.8, label: "0" },
+  { max: 2.5, label: "1" },
+  { max: 8, label: "2" },
+  { max: 25, label: "3" },
+  { max: 80, label: "4" },
+  { max: 140, label: "5-" },
+  { max: 250, label: "5+" },
+  { max: 450, label: "6-" },
+  { max: 800, label: "6+" },
+  { max: Infinity, label: "7" },
+];
 
-function intensityToShindoLabel(intensity) {
-  if (intensity === null || intensity === undefined) return null;
-  if (intensity < 0.5) return "0";
-  if (intensity < 1.5) return "1";
-  if (intensity < 2.5) return "2";
-  if (intensity < 3.5) return "3";
-  if (intensity < 4.5) return "4";
-  if (intensity < 5.0) return "5-";
-  if (intensity < 5.5) return "5+";
-  if (intensity < 6.0) return "6-";
-  if (intensity < 6.5) return "6+";
+function shindoLabelFromGal(pgaGal) {
+  if (pgaGal === null || pgaGal === undefined || pgaGal < 0) return null;
+  for (const band of SHINDO_GAL_BANDS) {
+    if (pgaGal < band.max) return band.label;
+  }
   return "7";
 }
 
-// pgaG: ShakeMap max PGA in units of g (standard-gravity fractions).
+// pgaG: PGA in units of g (standard-gravity fractions).
 function computeShindoFromPgaG(pgaG) {
   if (pgaG === null || pgaG === undefined) return null;
   const pgaGal = pgaG * GAL_PER_G;
-  const intensity = instrumentalIntensityFromPgaGal(pgaGal);
-  const label = intensityToShindoLabel(intensity);
+  const label = shindoLabelFromGal(pgaGal);
   if (label === null) return null;
-  return { pgaGal, intensity, label, iconPath: SHINDO_ICONS[label] };
+  return { pgaGal, label, iconPath: SHINDO_ICONS[label] };
 }
 
-window.Shindo = { computeShindoFromPgaG, SHINDO_ICONS };
+// Prefers the official (real seismic instrument) on-land PGA; falls back to
+// the DYFI ("Did You Feel It?") crowd-sourced estimate when no instrument
+// reading is available. Returns null if neither exists.
+function pickOnlandPga(row) {
+  const officialG = row?.sm_max_pga_onland ?? row?.d_sm_max_pga_onland;
+  if (officialG != null) return { pgaG: officialG, source: "official" };
+  const dyfiG = row?.sm_max_pga_onland_dyfi ?? row?.d_sm_max_pga_onland_dyfi;
+  if (dyfiG != null) return { pgaG: dyfiG, source: "dyfi" };
+  return null;
+}
+
+window.Shindo = { computeShindoFromPgaG, pickOnlandPga, SHINDO_ICONS };

@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS earthquake_details (
   sm_max_pga REAL,
   sm_max_pga_onland REAL,
   sm_onland_station_count INTEGER,
+  sm_max_pga_onland_dyfi REAL,
+  sm_onland_dyfi_station_count INTEGER,
   sm_max_pgv REAL,
   sm_version INTEGER,
   sm_map_status TEXT,
@@ -56,13 +58,19 @@ CREATE TABLE IF NOT EXISTS earthquake_details (
 );
 `;
 
-// Bump this whenever fields are added to what fetchDetail()/upsertDetail()
-// populate. A cached row stamped with an older version is treated as stale
-// and silently re-fetched next time it's opened - otherwise a row fetched
-// before a field existed (e.g. on-land PGA, rupture duration) would sit
-// there forever showing blanks for that field, since "a detail row already
-// exists" alone was previously enough to skip re-fetching it.
-const CURRENT_DETAIL_SCHEMA_VERSION = 2;
+// Bump this whenever fields are added to (or their meaning changes in) what
+// fetchDetail()/upsertDetail() populate. A cached row stamped with an older
+// version is treated as stale and silently re-fetched next time it's opened
+// - otherwise a row fetched before a field existed (e.g. on-land PGA,
+// rupture duration) would sit there forever showing blanks for that field,
+// since "a detail row already exists" alone was previously enough to skip
+// re-fetching it.
+//
+// sm_max_pga_onland / sm_onland_station_count are the "official" (real
+// seismic instrument, non-DYFI) on-land PGA - version 3 changed their
+// meaning from "all on-land observations" to "official only" and added the
+// separate sm_max_pga_onland_dyfi columns, so existing rows must re-fetch.
+const CURRENT_DETAIL_SCHEMA_VERSION = 3;
 
 // earthquake_details columns added after the initial release; applied to
 // already-existing local .sqlite files since CREATE TABLE IF NOT EXISTS
@@ -74,6 +82,8 @@ const DETAIL_COLUMN_MIGRATIONS = {
   mt_sourcetime_type: "TEXT",
   sm_max_pga_onland: "REAL",
   sm_onland_station_count: "INTEGER",
+  sm_max_pga_onland_dyfi: "REAL",
+  sm_onland_dyfi_station_count: "INTEGER",
   detail_schema_version: "INTEGER DEFAULT 0",
 };
 
@@ -204,7 +214,7 @@ async function upsertEarthquake(q, { force = false, skipPersist = false } = {}) 
 function getEarthquakes(sinceMs) {
   return all(
     `SELECT e.*, d.has_shakemap AS d_has_shakemap, d.sm_max_pga_onland AS d_sm_max_pga_onland,
-            d.sm_max_mmi AS d_sm_max_mmi
+            d.sm_max_pga_onland_dyfi AS d_sm_max_pga_onland_dyfi, d.sm_max_mmi AS d_sm_max_mmi
      FROM earthquakes e
      LEFT JOIN earthquake_details d ON d.id = e.id
      WHERE e.time >= ?
@@ -217,7 +227,7 @@ function getDetail(id) {
   return get("SELECT * FROM earthquake_details WHERE id = ?", [id]);
 }
 
-async function upsertDetail(id, d) {
+async function upsertDetail(id, d, { skipPersist = false } = {}) {
   run(
     `INSERT INTO earthquake_details (
        id, has_moment_tensor, mt_np1_strike, mt_np1_dip, mt_np1_rake, mt_np2_strike, mt_np2_dip, mt_np2_rake,
@@ -225,10 +235,11 @@ async function upsertDetail(id, d) {
        mt_tensor_mrr, mt_tensor_mtt, mt_tensor_mpp, mt_tensor_mrt, mt_tensor_mrp, mt_tensor_mtp,
        mt_beachball_source, mt_sourcetime_duration, mt_sourcetime_risetime, mt_sourcetime_decaytime,
        mt_sourcetime_type, mt_raw_json,
-       has_shakemap, sm_max_mmi, sm_max_pga, sm_max_pga_onland, sm_onland_station_count, sm_max_pgv,
+       has_shakemap, sm_max_mmi, sm_max_pga, sm_max_pga_onland, sm_onland_station_count,
+       sm_max_pga_onland_dyfi, sm_onland_dyfi_station_count, sm_max_pgv,
        sm_version, sm_map_status, sm_intensity_image_url, sm_raw_json,
        detail_fetched_at, detail_schema_version
-     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(id) DO UPDATE SET
        has_moment_tensor=excluded.has_moment_tensor, mt_np1_strike=excluded.mt_np1_strike, mt_np1_dip=excluded.mt_np1_dip,
        mt_np1_rake=excluded.mt_np1_rake, mt_np2_strike=excluded.mt_np2_strike, mt_np2_dip=excluded.mt_np2_dip,
@@ -242,6 +253,7 @@ async function upsertDetail(id, d) {
        mt_raw_json=excluded.mt_raw_json,
        has_shakemap=excluded.has_shakemap, sm_max_mmi=excluded.sm_max_mmi, sm_max_pga=excluded.sm_max_pga,
        sm_max_pga_onland=excluded.sm_max_pga_onland, sm_onland_station_count=excluded.sm_onland_station_count,
+       sm_max_pga_onland_dyfi=excluded.sm_max_pga_onland_dyfi, sm_onland_dyfi_station_count=excluded.sm_onland_dyfi_station_count,
        sm_max_pgv=excluded.sm_max_pgv, sm_version=excluded.sm_version, sm_map_status=excluded.sm_map_status,
        sm_intensity_image_url=excluded.sm_intensity_image_url, sm_raw_json=excluded.sm_raw_json,
        detail_fetched_at=excluded.detail_fetched_at, detail_schema_version=excluded.detail_schema_version`,
@@ -255,14 +267,15 @@ async function upsertDetail(id, d) {
       d.mt?.tensorMrt ?? null, d.mt?.tensorMrp ?? null, d.mt?.tensorMtp ?? null,
       d.mt?.beachballSource ?? null, d.mt?.sourcetimeDuration ?? null, d.mt?.sourcetimeRisetime ?? null,
       d.mt?.sourcetimeDecaytime ?? null, d.mt?.sourcetimeType ?? null, d.mt ? JSON.stringify(d.mt.raw) : null,
-      d.hasShakemap ? 1 : 0, d.sm?.maxMmi ?? null, d.sm?.maxPga ?? null, d.sm?.maxPgaOnland ?? null,
-      d.sm?.onlandStationCount ?? null, d.sm?.maxPgv ?? null,
+      d.hasShakemap ? 1 : 0, d.sm?.maxMmi ?? null, d.sm?.maxPga ?? null, d.sm?.officialMaxPgaOnland ?? null,
+      d.sm?.officialOnlandStationCount ?? null, d.sm?.dyfiMaxPgaOnland ?? null, d.sm?.dyfiOnlandStationCount ?? null,
+      d.sm?.maxPgv ?? null,
       d.sm?.version ?? null, d.sm?.mapStatus ?? null, d.sm?.intensityImageUrl ?? null,
       d.sm ? JSON.stringify(d.sm.raw) : null,
       Date.now(), CURRENT_DETAIL_SCHEMA_VERSION,
     ]
   );
-  await persist();
+  if (!skipPersist) await persist();
 }
 
 window.EqDb = {

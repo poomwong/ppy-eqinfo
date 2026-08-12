@@ -12,12 +12,12 @@ function fmtExp(v) {
 }
 
 function shindoCell(q) {
-  if (!q.d_has_shakemap || q.d_sm_max_pga_onland == null) {
-    return `<span class="empty-note">-</span>`;
-  }
-  const shindo = Shindo.computeShindoFromPgaG(q.d_sm_max_pga_onland);
+  const picked = q.d_has_shakemap ? Shindo.pickOnlandPga(q) : null;
+  if (!picked) return `<span class="empty-note">-</span>`;
+  const shindo = Shindo.computeShindoFromPgaG(picked.pgaG);
   if (!shindo) return `<span class="empty-note">-</span>`;
-  return `<img class="shindo-icon shindo-icon-sm" src="${shindo.iconPath}" alt="Shindo ${shindo.label}" title="Shindo ${shindo.label}">`;
+  const title = `Shindo ${shindo.label} (${picked.source === "official" ? "official station" : "DYFI estimate"})`;
+  return `<img class="shindo-icon shindo-icon-sm" src="${shindo.iconPath}" alt="Shindo ${shindo.label}" title="${title}">`;
 }
 
 function renderTable(quakes, onSelect) {
@@ -113,12 +113,14 @@ function tensorSection(detail, quake) {
 }
 
 function shindoBadge(detail) {
-  const shindo = detail?.sm_max_pga_onland != null ? Shindo.computeShindoFromPgaG(detail.sm_max_pga_onland) : null;
+  const picked = detail?.has_shakemap ? Shindo.pickOnlandPga(detail) : null;
+  const shindo = picked ? Shindo.computeShindoFromPgaG(picked.pgaG) : null;
   if (!shindo) {
     return `<div class="intensity-badge"><span class="intensity-label">SHINDO</span><span class="intensity-value">-</span></div>`;
   }
+  const sourceNote = picked.source === "official" ? "official station" : "DYFI estimate";
   return `
-    <div class="intensity-badge">
+    <div class="intensity-badge" title="From ${sourceNote}">
       <img class="shindo-icon" src="${shindo.iconPath}" alt="Shindo ${shindo.label}">
       <span class="intensity-label">SHINDO</span>
       <span class="intensity-value">${shindo.label}</span>
@@ -164,14 +166,14 @@ function shakemapSection(detail) {
   const img = detail.sm_intensity_image_url
     ? `<img class="shakemap-img" src="${detail.sm_intensity_image_url}" alt="ShakeMap intensity" loading="lazy">`
     : "";
-  const stationNote =
-    detail.sm_onland_station_count != null
-      ? `from ${detail.sm_onland_station_count} on-land station/DYFI observation(s)`
-      : "no on-land observations available";
+  const officialCount = detail.sm_onland_station_count ?? 0;
+  const dyfiCount = detail.sm_onland_dyfi_station_count ?? 0;
   return `
     <dl>
-      <dt title="Max observed/estimated PGA at on-land stations and DYFI reports, not the offshore grid peak">Max PGA, on-land (g)</dt>
-      <dd>${fmtNum(detail.sm_max_pga_onland, 3)} <span class="empty-note">(${stationNote})</span></dd>
+      <dt title="Max PGA from real on-land seismic instruments - the authoritative value">Max PGA, on-land, official (g)</dt>
+      <dd>${fmtNum(detail.sm_max_pga_onland, 3)} <span class="empty-note">(${officialCount} station(s))</span></dd>
+      <dt title="Max PGA estimated from on-land 'Did You Feel It?' crowd reports - used only as a fallback/reference">Max PGA, on-land, DYFI (g)</dt>
+      <dd>${fmtNum(detail.sm_max_pga_onland_dyfi, 3)} <span class="empty-note">(${dyfiCount} report(s))</span></dd>
       <dt>Max PGV (cm/s)</dt><dd>${fmtNum(detail.sm_max_pgv, 3)}</dd>
       <dt>Version</dt><dd>${detail.sm_version ?? "-"}</dd>
       <dt>Map Status</dt><dd>${detail.sm_map_status ?? "-"}</dd>
