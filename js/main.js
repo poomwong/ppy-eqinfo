@@ -4,7 +4,7 @@ const daysSelect = document.getElementById("days-select");
 const fetchNewBtn = document.getElementById("fetch-new-btn");
 const refetchAllBtn = document.getElementById("refetch-all-btn");
 const timeToggleBtn = document.getElementById("time-toggle-btn");
-const timeColHeader = document.getElementById("time-col-header");
+const timeColLabel = document.getElementById("time-col-label");
 const connectExistingBtn = document.getElementById("db-connect-existing");
 const connectNewBtn = document.getElementById("db-connect-new");
 const reconnectBtn = document.getElementById("db-reconnect");
@@ -23,6 +23,78 @@ const DETAIL_FETCH_CONCURRENCY = 4;
 let dbReady = false;
 let selectedId = null;
 let currentQuakes = [];
+
+// Table sort state. Deliberately just an in-memory variable, not persisted
+// anywhere - resets to the default (most recent first) on every page load,
+// as requested, while still surviving re-renders within the same session
+// (Fetch New, day-range changes, etc.).
+const ALERT_RANK = { green: 1, yellow: 2, orange: 3, red: 4 };
+let sortColumn = "time";
+let sortDirection = "desc";
+
+function sortValue(q, column) {
+  switch (column) {
+    case "time":
+      return q.time ?? null;
+    case "mag":
+      return q.mag ?? null;
+    case "mmi":
+      return q.d_sm_max_mmi ?? null;
+    case "shindo": {
+      const picked = q.d_has_shakemap ? Shindo.primaryOnlandPga(q) : null;
+      const shindo = picked ? Shindo.computeShindoFromPgaG(picked.pgaG) : null;
+      return shindo ? shindo.intensity : null;
+    }
+    case "alert":
+      return ALERT_RANK[q.alert] ?? null;
+    case "tsunami":
+      return q.tsunami ? 1 : 0;
+    default:
+      return null;
+  }
+}
+
+// Missing values always sort to the end, regardless of direction - flipping
+// their position on every direction toggle would be confusing.
+function compareQuakes(a, b) {
+  const av = sortValue(a, sortColumn);
+  const bv = sortValue(b, sortColumn);
+  const aNull = av === null || av === undefined;
+  const bNull = bv === null || bv === undefined;
+  if (aNull && bNull) return 0;
+  if (aNull) return 1;
+  if (bNull) return -1;
+  return sortDirection === "asc" ? av - bv : bv - av;
+}
+
+function sortCurrentQuakes() {
+  currentQuakes.sort(compareQuakes);
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll("th.sortable").forEach((th) => {
+    const indicator = th.querySelector(".sort-indicator");
+    if (!indicator) return;
+    indicator.textContent = th.dataset.sort === sortColumn ? (sortDirection === "asc" ? "▲" : "▼") : "";
+  });
+}
+
+function wireSortHeaders() {
+  document.querySelectorAll("th.sortable").forEach((th) => {
+    th.addEventListener("click", () => {
+      const column = th.dataset.sort;
+      if (sortColumn === column) {
+        sortDirection = sortDirection === "asc" ? "desc" : "asc";
+      } else {
+        sortColumn = column;
+        sortDirection = "desc";
+      }
+      sortCurrentQuakes();
+      updateSortIndicators();
+      EqUi.renderTable(currentQuakes, (id) => selectQuake(id));
+    });
+  });
+}
 
 function setDbStatus(msg) {
   dbStatusEl.textContent = msg;
@@ -49,6 +121,8 @@ function renderFromDb() {
   const days = Number(daysSelect.value);
   const sinceMs = Date.now() - days * 24 * 60 * 60 * 1000;
   currentQuakes = EqDb.getEarthquakes(sinceMs);
+  sortCurrentQuakes();
+  updateSortIndicators();
   EqUi.renderTable(currentQuakes, (id) => selectQuake(id));
   EqMap.renderMap(currentQuakes, (id) => selectQuake(id));
 
@@ -255,11 +329,13 @@ refetchAllBtn.addEventListener("click", () => fullSync({ force: true }));
 daysSelect.addEventListener("change", () => renderFromDb());
 tabListBtn.addEventListener("click", () => switchTab("list"));
 tabDetailBtn.addEventListener("click", () => switchTab("detail"));
+wireSortHeaders();
+updateSortIndicators();
 
 function updateTimeToggleUi() {
   const mode = TimeFormat.getMode();
   timeToggleBtn.textContent = mode === "utc" ? "Time: UTC" : "Time: Local";
-  timeColHeader.textContent = mode === "utc" ? "Date & Time (UTC)" : "Date & Time (Local)";
+  timeColLabel.textContent = mode === "utc" ? "Date & Time (UTC)" : "Date & Time (Local)";
 }
 timeToggleBtn.addEventListener("click", () => {
   TimeFormat.toggle();

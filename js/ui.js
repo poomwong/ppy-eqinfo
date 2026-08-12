@@ -169,15 +169,20 @@ function dyfiShindoBadge(detail) {
 }
 
 // Rough MMI color ramp, kept visually consistent with the Shindo icon palette.
+// Standard USGS ShakeMap MMI color ramp (the mi.cpt palette used on every
+// published ShakeMap), keyed to the rounded Roman-numeral grade boundaries.
 const MMI_COLOR_STOPS = [
-  [2, "#9E9E9E", "#fff"],
-  [4, "#4FC3F7", "#fff"],
-  [5, "#66BB6A", "#fff"],
-  [6, "#FFEE58", "#3A3200"],
-  [7, "#FFA726", "#fff"],
-  [8, "#FB8C00", "#fff"],
-  [9, "#E53935", "#fff"],
-  [10, "#B71C1C", "#fff"],
+  [1.5, "#FFFFFF", "#1a1a1a"],
+  [2.5, "#BFCCFF", "#1a1a1a"],
+  [3.5, "#A0E6FF", "#1a1a1a"],
+  [4.5, "#80FFFF", "#1a1a1a"],
+  [5.5, "#7AFF93", "#1a1a1a"],
+  [6.5, "#FFFF00", "#1a1a1a"],
+  [7.5, "#FFC800", "#1a1a1a"],
+  [8.5, "#FF9100", "#fff"],
+  [9.5, "#FF0000", "#fff"],
+  [10.5, "#C80000", "#fff"],
+  [11.5, "#A00000", "#fff"],
 ];
 
 function mmiColors(mmi) {
@@ -185,7 +190,7 @@ function mmiColors(mmi) {
   for (const [max, bg, fg] of MMI_COLOR_STOPS) {
     if (mmi < max) return [bg, fg];
   }
-  return ["#6A1B9A", "#fff"];
+  return ["#800000", "#fff"];
 }
 
 // MMI is conventionally expressed in Roman numerals, rounded to the nearest
