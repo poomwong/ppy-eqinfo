@@ -235,10 +235,12 @@ const LONG_PERIOD_ICONS = {
 const BANGKOK_DEFAULT = { lat: 13.7563, lon: 100.5018 };
 
 // Estimated MMI + JMA long-period class at an arbitrary location (default
-// Bangkok), from magnitude + distance alone - no ShakeMap data involved, so
-// this is shown for every earthquake with a known epicenter, not just ones
-// with ShakeMap. Hidden entirely when the estimate rounds to MMI 0 (not
-// felt) at that distance, to avoid cluttering every row with a null result.
+// Bangkok), from magnitude + distance alone - no ShakeMap data involved.
+// Restricted to earthquakes sourced in Thailand/Myanmar/Andaman/Arakan (see
+// LocalEstimate.isInSourceRegion) and hidden when the estimate rounds to
+// MMI 0 (not felt) at that distance - so this only shows up for the
+// specific source regions with a known connection to the target location,
+// not every earthquake with an epicenter.
 function computeLocalEstimate(quake, targetLocation) {
   if (!targetLocation || quake.mag == null || quake.latitude == null || quake.longitude == null) return null;
   return LocalEstimate.estimateLocal(
@@ -265,17 +267,6 @@ function localEstimateBadges(quake, targetLocation) {
     </div>
   `;
 
-  const localShindo = Shindo.computeShindoFromPgaG(estimate.estimatedPgaG);
-  const shindoBadgeHtml = localShindo
-    ? `
-    <div class="intensity-badge" title="Estimated Shindo at ${locLabel}, derived from the local MMI estimate above. ${commonTitle}">
-      <img class="shindo-icon" src="${localShindo.iconPath}" alt="Shindo ${localShindo.label}">
-      <span class="intensity-label">SHINDO @ ${locLabel}</span>
-      <span class="intensity-value">${localShindo.label}</span>
-    </div>
-  `
-    : "";
-
   const longPeriod =
     estimate.longPeriodClass > 0
       ? `
@@ -287,7 +278,7 @@ function localEstimateBadges(quake, targetLocation) {
   `
       : "";
 
-  return localMmi + shindoBadgeHtml + longPeriod;
+  return localMmi + longPeriod;
 }
 
 function shakemapSection(detail) {

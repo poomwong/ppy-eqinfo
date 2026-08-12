@@ -1,7 +1,11 @@
-// Estimates MMI (and a derived JMA long-period ground-motion class) at an
-// arbitrary location from magnitude + hypocentral distance alone - no
-// ShakeMap/instrumental data needed. This is deliberately a rough estimate:
-// see the tooltips wired up in ui.js for the caveats shown to the user.
+// Estimates MMI and JMA long-period ground-motion class at an arbitrary
+// location from magnitude + hypocentral distance alone - no ShakeMap/
+// instrumental data needed. Restricted to earthquakes sourced in Thailand,
+// Myanmar, Andaman, or Arakan (see SOURCE_REGIONS below) - the only regions
+// with a known historical/tectonic connection to Bangkok-felt shaking; a
+// generic distance-based model has no way to filter that on its own. This
+// is deliberately a rough estimate: see the tooltips wired up in ui.js for
+// the caveats shown to the user.
 
 const EARTH_RADIUS_KM = 6371;
 
@@ -16,6 +20,27 @@ function haversineKm(lat1, lon1, lat2, lon2) {
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(a));
+}
+
+// The estimate is only meaningful for source regions with a known,
+// historical connection to Bangkok-felt shaking - the Sagaing Fault
+// (Myanmar), the Arakan/Rakhine subduction interface, and the
+// Andaman-Sumatra megathrust (whose rupture zone for the 2004 M9.1 event
+// extended south to roughly 2-3N off northern Sumatra, well south of the
+// "Andaman Sea" proper - included here for that reason). A generic
+// magnitude+distance model has no way to know a quake is tectonically
+// irrelevant to Bangkok just because it's within the distance cutoff, so
+// this is an explicit allow-list, checked against the earthquake's own
+// epicenter (not the target location).
+const SOURCE_REGIONS = [
+  { name: "Thailand", latMin: 5.5, latMax: 20.5, lonMin: 97.0, lonMax: 105.7 },
+  { name: "Myanmar", latMin: 9.5, latMax: 28.6, lonMin: 92.0, lonMax: 101.2 },
+  { name: "Andaman (incl. 2004 Sumatra-Andaman rupture zone)", latMin: 2.0, latMax: 15.0, lonMin: 91.0, lonMax: 98.5 },
+  { name: "Arakan (offshore subduction)", latMin: 14.5, latMax: 22.0, lonMin: 89.0, lonMax: 95.0 },
+];
+
+function isInSourceRegion(lat, lon) {
+  return SOURCE_REGIONS.some((r) => lat >= r.latMin && lat <= r.latMax && lon >= r.lonMin && lon <= r.lonMax);
 }
 
 // Allen, Wald & Worden (2012) Intensity Prediction Equation, hypocentral-
@@ -58,15 +83,6 @@ function mmiToApproxPgvCms(mmi) {
   return Math.pow(10, (mmi - 2.35) / 3.47);
 }
 
-// Wald et al. (1999b) PGA-MMI relationship (as reproduced in Sokolov 2013,
-// eq. 1a), inverted the same way, to derive an approximate PGA (gal) for
-// feeding into the existing Shindo calculation - so "local Shindo" reuses
-// the same JMA band table already used for ShakeMap-derived events, rather
-// than a separate ad hoc scale.
-function mmiToApproxPgaGal(mmi) {
-  return Math.pow(10, (mmi + 1.66) / 3.66);
-}
-
 // Bangkok's damage in the 2025 Myanmar earthquake was specifically a long-
 // period (surface wave / tall-building resonance) phenomenon, not a general
 // shaking-intensity one - NEHRP Fv (long-period) site factors for very soft
@@ -92,6 +108,8 @@ function longPeriodClassFromKine(kine) {
 // quake: { mag, latitude, longitude, depth }. target: { lat, lon }.
 function estimateLocal(quake, target, applyBangkokAmplification) {
   if (quake.mag == null || quake.latitude == null || quake.longitude == null) return null;
+  if (!isInSourceRegion(quake.latitude, quake.longitude)) return null;
+
   const repiKm = haversineKm(quake.latitude, quake.longitude, target.lat, target.lon);
   if (repiKm > MAX_VALID_DISTANCE_KM) return null;
 
@@ -106,9 +124,6 @@ function estimateLocal(quake, target, applyBangkokAmplification) {
   const longPeriodPgvCms = applyBangkokAmplification ? basePgvCms * BANGKOK_LONGPERIOD_MULTIPLIER : basePgvCms;
   const longPeriodClass = longPeriodClassFromKine(longPeriodPgvCms);
 
-  const estimatedPgaGal = mmiToApproxPgaGal(mmi);
-  const estimatedPgaG = estimatedPgaGal / 980.665;
-
   return {
     repiKm,
     rhypoKm,
@@ -116,8 +131,7 @@ function estimateLocal(quake, target, applyBangkokAmplification) {
     mmiRounded,
     longPeriodKine: longPeriodPgvCms,
     longPeriodClass,
-    estimatedPgaG,
   };
 }
 
-window.LocalEstimate = { haversineKm, aww12Mmi, estimateLocal, longPeriodClassFromKine };
+window.LocalEstimate = { haversineKm, aww12Mmi, estimateLocal, longPeriodClassFromKine, isInSourceRegion };
