@@ -287,14 +287,17 @@ function selectQuake(id) {
   switchTab("detail");
 
   EqUi.renderDetail(quake, EqDb.getDetail(id), targetLocation);
-  wireDetailRefreshButton();
+  wireDetailButtons();
 }
 
-function wireDetailRefreshButton() {
-  const btn = document.getElementById("detail-refresh-btn");
-  if (!btn) return;
-  btn.addEventListener("click", () => {
+function wireDetailButtons() {
+  const refreshBtn = document.getElementById("detail-refresh-btn");
+  refreshBtn?.addEventListener("click", () => {
     if (selectedId) refetchSingleDetail(selectedId);
+  });
+  const exportBtn = document.getElementById("detail-export-btn");
+  exportBtn?.addEventListener("click", () => {
+    if (selectedId) exportDetailAsHtml(selectedId);
   });
 }
 
@@ -316,8 +319,61 @@ async function refetchSingleDetail(id) {
   }
   if (selectedId === id) {
     EqUi.renderDetail(quake, EqDb.getDetail(id), targetLocation);
-    wireDetailRefreshButton();
+    wireDetailButtons();
   }
+}
+
+// Downloads a standalone, self-contained HTML snapshot of the currently
+// selected earthquake's detail view - CSS and the beachball baked in as a
+// static image, local icon <img> sources inlined as data URIs, and the raw
+// USGS API response embedded as a collapsible JSON snippet. Works entirely
+// offline once downloaded; no dependency on this app or its files.
+async function exportDetailAsHtml(id) {
+  const quake = currentQuakes.find((q) => q.id === id);
+  if (!quake) return;
+  const detail = EqDb.getDetail(id);
+  const btn = document.getElementById("detail-export-btn");
+  if (btn) btn.disabled = true;
+  try {
+    const canvas = document.getElementById("beachball-canvas");
+    const beachballSrc = canvas ? canvas.toDataURL("image/png") : undefined;
+    const html = await inlineLocalIcons(EqUi.buildStaticExportHtml(quake, detail, targetLocation, { beachballSrc }));
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${quake.id || "earthquake"}-detail.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    setDbStatus(`Export failed: ${err.message}`);
+    console.error(err);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Replaces relative icons/*.svg <img> src references with base64 data URIs
+// so the exported file has no dependency on the icons/ folder being
+// alongside it. Best-effort: if fetch() fails (e.g. running from file://,
+// where fetching local files can be blocked by the browser), the original
+// relative path is left in place - the export still works as long as it
+// stays next to the app's icons/ folder.
+async function inlineLocalIcons(html) {
+  const paths = [...new Set([...html.matchAll(/src="(icons\/[^"]+\.svg)"/g)].map((m) => m[1]))];
+  let result = html;
+  for (const path of paths) {
+    try {
+      const res = await fetch(path);
+      if (!res.ok) continue;
+      const svgText = await res.text();
+      const dataUri = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgText)))}`;
+      result = result.split(`src="${path}"`).join(`src="${dataUri}"`);
+    } catch {
+      // Leave as a relative path - see comment above.
+    }
+  }
+  return result;
 }
 
 // --- Event ID lookup -------------------------------------------------

@@ -103,16 +103,21 @@ function planeInterpretation(label, strike, dip, rake) {
   `;
 }
 
-function tensorSection(detail, quake) {
+// beachballSrc, when given, renders a static <img> (a snapshot of the
+// beachball, e.g. for the HTML export) instead of the live <canvas> that
+// renderDetail() draws into after inserting this markup.
+function tensorSection(detail, quake, beachballSrc) {
   if (!detail || !detail.has_moment_tensor) {
     return `<p class="empty-note">No moment tensor solution available for this event.</p>`;
   }
   const hasPlanes =
     detail.mt_np1_strike !== null && detail.mt_np1_dip !== null &&
     detail.mt_np2_strike !== null && detail.mt_np2_dip !== null;
-  const beachball = hasPlanes
-    ? `<canvas id="beachball-canvas" class="beachball" width="160" height="160"></canvas>`
-    : "";
+  const beachball = !hasPlanes
+    ? ""
+    : beachballSrc
+      ? `<img class="beachball" width="160" height="160" src="${beachballSrc}" alt="Beachball diagram">`
+      : `<canvas id="beachball-canvas" class="beachball" width="160" height="160"></canvas>`;
 
   return `
     <div class="tensor-layout">
@@ -333,19 +338,21 @@ function shakemapSection(detail) {
   `;
 }
 
-function renderDetail(quake, detail, targetLocation) {
-  const panel = document.getElementById("detail-panel");
+// beachballSrc, when given, is threaded down to tensorSection() to render a
+// static <img> snapshot instead of the live <canvas> - used by the HTML
+// export, which can't run drawBeachball() itself once it's a standalone file.
+function buildDetailHtml(quake, detail, targetLocation, { beachballSrc, actionsHtml = "" } = {}) {
   const fetchedNote = detail?.detail_fetched_at
     ? `Detail last fetched ${formatDateTime(detail.detail_fetched_at)}`
     : "Detail not yet fetched";
 
-  panel.innerHTML = `
+  return `
     <div class="detail-header">
       <div>
         <h2>${quake.place ?? "Unknown location"}</h2>
         <p class="detail-sub">${formatDateTime(quake.time)} &middot; <a href="${quake.url}" target="_blank" rel="noopener">USGS page</a> &middot; <a href="${quake.detail_url}" target="_blank" rel="noopener" title="Raw USGS API JSON for this event">Raw Info</a></p>
       </div>
-      <button id="detail-refresh-btn" title="Force refetch this earthquake's technical data (moment tensor, ShakeMap) from USGS, even if already cached">Re-fetch Technical Data</button>
+      <div class="detail-header-actions">${actionsHtml}</div>
     </div>
 
     <section class="detail-block">
@@ -370,7 +377,7 @@ function renderDetail(quake, detail, targetLocation) {
 
     <section class="detail-block">
       <h3>Moment Tensor</h3>
-      ${tensorSection(detail, quake)}
+      ${tensorSection(detail, quake, beachballSrc)}
     </section>
 
     <section class="detail-block">
@@ -380,6 +387,15 @@ function renderDetail(quake, detail, targetLocation) {
 
     <p class="fetched-note">${fetchedNote}</p>
   `;
+}
+
+function renderDetail(quake, detail, targetLocation) {
+  const panel = document.getElementById("detail-panel");
+  const actionsHtml = `
+    <button id="detail-refresh-btn" title="Force refetch this earthquake's technical data (moment tensor, ShakeMap) from USGS, even if already cached">Re-fetch Technical Data</button>
+    <button id="detail-export-btn" title="Save this event's detail view as a standalone, self-contained HTML file (includes the beachball diagram and the raw USGS API response) - works offline, no dependency on this app">Export as HTML</button>
+  `;
+  panel.innerHTML = buildDetailHtml(quake, detail, targetLocation, { actionsHtml });
 
   const canvas = document.getElementById("beachball-canvas");
   if (canvas && detail?.has_moment_tensor) {
@@ -393,4 +409,70 @@ function renderDetail(quake, detail, targetLocation) {
   }
 }
 
-window.EqUi = { renderTable, renderDetail };
+// Collects this page's own CSS rules (skipping cross-origin sheets like
+// Leaflet's CDN stylesheet, which throw on .cssRules access due to CORS and
+// aren't needed for the detail panel anyway) so the export is fully
+// self-contained - no dependency on style.css being alongside it.
+function collectPageCss() {
+  let css = "";
+  for (const sheet of document.styleSheets) {
+    try {
+      for (const rule of sheet.cssRules) css += rule.cssText + "\n";
+    } catch {
+      // Cross-origin stylesheet - can't read its rules, skip it.
+    }
+  }
+  return css;
+}
+
+function buildRawJsonBlock(quake, detail) {
+  const payload = {
+    summary: quake.raw_json ? JSON.parse(quake.raw_json) : null,
+    momentTensor: detail?.mt_raw_json ? JSON.parse(detail.mt_raw_json) : null,
+    shakemap: detail?.sm_raw_json ? JSON.parse(detail.sm_raw_json) : null,
+  };
+  const json = JSON.stringify(payload, null, 2).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  return `
+    <details class="raw-json-block">
+      <summary>Raw USGS API Response (as cached)</summary>
+      <pre>${json}</pre>
+    </details>
+  `;
+}
+
+// Builds a complete, standalone HTML document for one earthquake's detail
+// view - CSS inlined, beachball baked in as a static image (beachballSrc,
+// typically a canvas.toDataURL() snapshot taken by the caller), and the raw
+// USGS API response embedded as a collapsible JSON snippet. Local icon
+// <img> src paths are left as relative paths here; main.js inlines them as
+// data URIs afterward since that requires a fetch() this pure-rendering
+// module doesn't otherwise do.
+function buildStaticExportHtml(quake, detail, targetLocation, { beachballSrc } = {}) {
+  const detailHtml = buildDetailHtml(quake, detail, targetLocation, { beachballSrc });
+  const css = collectPageCss();
+  const exportedAt = TimeFormat.format(Date.now()) + ` (${TimeFormat.getMode() === "utc" ? "UTC" : "local"})`;
+  const title = `${quake.place ?? quake.id ?? "Earthquake"} – Earthquake Detail Export`;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${title}</title>
+<style>
+body { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+.export-note { color: var(--muted); font-size: 0.8rem; margin-bottom: 1.5rem; }
+${css}
+</style>
+</head>
+<body>
+<p class="export-note">Static export from ppy-eqinfo &mdash; generated ${exportedAt}. Reflects data as cached at export time; USGS may have since revised it.</p>
+<div id="detail-panel">
+${detailHtml}
+</div>
+${buildRawJsonBlock(quake, detail)}
+</body>
+</html>
+`;
+}
+
+window.EqUi = { renderTable, renderDetail, buildStaticExportHtml };
