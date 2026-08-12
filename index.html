@@ -31,9 +31,10 @@
       <button id="location-toggle-btn" title="Set the location used to estimate local MMI / long-period shaking on the detail page">Location: Bangkok</button>
       <div id="location-popup" class="hidden">
         <label for="location-lat">Latitude</label>
-        <input type="number" id="location-lat" step="0.0001" value="13.7563">
+        <input type="text" id="location-lat" inputmode="decimal" placeholder="-90 to 90" value="13.7563">
         <label for="location-lon">Longitude</label>
-        <input type="number" id="location-lon" step="0.0001" value="100.5018">
+        <input type="text" id="location-lon" inputmode="decimal" placeholder="-180 to 180" value="100.5018">
+        <p id="location-error" class="field-error hidden"></p>
         <label class="checkbox-label">
           <input type="checkbox" id="location-amplify">
           Apply Basin Amplification (Bangkok only)

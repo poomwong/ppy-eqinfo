@@ -125,7 +125,7 @@ main {
   font-size: 0.8rem;
 }
 
-#location-popup input[type="number"] {
+#location-popup input[type="text"] {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
@@ -133,6 +133,12 @@ main {
   padding: 0.35rem 0.6rem;
   font-size: 0.9rem;
   width: 100%;
+}
+
+.field-error {
+  margin: 0;
+  color: #ff6b6b;
+  font-size: 0.78rem;
 }
 
 .checkbox-label {

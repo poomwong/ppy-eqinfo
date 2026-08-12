@@ -23,6 +23,7 @@ const locationToggleBtn = document.getElementById("location-toggle-btn");
 const locationPopup = document.getElementById("location-popup");
 const locationLatInput = document.getElementById("location-lat");
 const locationLonInput = document.getElementById("location-lon");
+const locationErrorEl = document.getElementById("location-error");
 const locationAmplifyInput = document.getElementById("location-amplify");
 const locationApplyBtn = document.getElementById("location-apply-btn");
 const loadMoreLink = document.getElementById("load-more-link");
@@ -595,10 +596,29 @@ document.addEventListener("click", (e) => {
   }
 });
 
+// Plain decimal degrees only (optional leading -, optional fractional part) -
+// no scientific notation, no stray characters. Number() alone would also
+// accept things like "1e5", "Infinity", or "" (as 0), none of which are
+// sane coordinate input.
+const DECIMAL_DEGREES_RE = /^-?\d+(\.\d+)?$/;
+
+function parseCoordinate(raw, min, max) {
+  const trimmed = raw.trim();
+  if (!DECIMAL_DEGREES_RE.test(trimmed)) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < min || value > max) return null;
+  return value;
+}
+
 locationApplyBtn.addEventListener("click", () => {
-  const lat = Number(locationLatInput.value);
-  const lon = Number(locationLonInput.value);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  const lat = parseCoordinate(locationLatInput.value, -90, 90);
+  const lon = parseCoordinate(locationLonInput.value, -180, 180);
+  if (lat === null || lon === null) {
+    locationErrorEl.textContent = "Enter valid decimal degrees: latitude -90 to 90, longitude -180 to 180.";
+    locationErrorEl.classList.remove("hidden");
+    return;
+  }
+  locationErrorEl.classList.add("hidden");
   targetLocation = { lat, lon, amplify: locationAmplifyInput.checked };
   saveTargetLocation();
   updateLocationToggleLabel();
