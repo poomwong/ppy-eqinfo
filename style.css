@@ -340,6 +340,12 @@ dd {
   height: 28px;
 }
 
+.shindo-icon-sm {
+  width: 22px;
+  height: 22px;
+  vertical-align: middle;
+}
+
 .intensity-label {
   color: var(--muted);
   font-size: 0.75rem;

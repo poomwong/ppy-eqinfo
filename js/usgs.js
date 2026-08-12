@@ -70,6 +70,10 @@ function parseMomentTensor(product) {
     tensorMrp: num(p["tensor-mrp"]),
     tensorMtp: num(p["tensor-mtp"]),
     beachballSource: p["beachball-source"] ?? null,
+    sourcetimeDuration: num(p["sourcetime-duration"]),
+    sourcetimeRisetime: num(p["sourcetime-risetime"]),
+    sourcetimeDecaytime: num(p["sourcetime-decaytime"]),
+    sourcetimeType: p["sourcetime-type"] ?? null,
     raw: p,
   };
 }
@@ -84,8 +88,26 @@ function parseShakemap(product) {
     version: num(p["version"]),
     mapStatus: p["map-status"] ?? null,
     intensityImageUrl: intensityContent?.url ?? null,
+    stationListUrl: product.contents?.["download/stationlist.json"]?.url ?? null,
     raw: p,
   };
+}
+
+// The gridded ShakeMap max PGA can peak directly over an offshore rupture,
+// which nobody actually feels. The station list only contains points where
+// a seismic instrument or a "Did You Feel It?" report exists — i.e. places
+// people actually are — so its max is a much better proxy for on-land shaking.
+async function fetchOnlandMaxPga(stationListUrl) {
+  if (!stationListUrl) return { maxPgaOnland: null, onlandStationCount: 0 };
+  const res = await fetch(stationListUrl);
+  if (!res.ok) return { maxPgaOnland: null, onlandStationCount: 0 };
+  const data = await res.json();
+  const pgasPercentG = (data.features || [])
+    .map((f) => f.properties?.pga)
+    .filter((v) => typeof v === "number" && Number.isFinite(v));
+  if (pgasPercentG.length === 0) return { maxPgaOnland: null, onlandStationCount: 0 };
+  const maxPercentG = Math.max(...pgasPercentG);
+  return { maxPgaOnland: maxPercentG / 100, onlandStationCount: pgasPercentG.length };
 }
 
 async function fetchDetail(idOrUrl) {
@@ -96,11 +118,19 @@ async function fetchDetail(idOrUrl) {
   const products = data.properties.products || {};
   const mtProduct = products["moment-tensor"]?.[0];
   const smProduct = products["shakemap"]?.[0];
+
+  const sm = smProduct ? parseShakemap(smProduct) : null;
+  if (sm) {
+    const { maxPgaOnland, onlandStationCount } = await fetchOnlandMaxPga(sm.stationListUrl);
+    sm.maxPgaOnland = maxPgaOnland;
+    sm.onlandStationCount = onlandStationCount;
+  }
+
   return {
     hasMomentTensor: !!mtProduct,
     mt: mtProduct ? parseMomentTensor(mtProduct) : null,
     hasShakemap: !!smProduct,
-    sm: smProduct ? parseShakemap(smProduct) : null,
+    sm,
   };
 }
 

@@ -11,6 +11,15 @@ function fmtExp(v) {
   return v === null || v === undefined || Number.isNaN(v) ? "-" : Number(v).toExponential(3);
 }
 
+function shindoCell(q) {
+  if (!q.d_has_shakemap || q.d_sm_max_pga_onland == null) {
+    return `<span class="empty-note">-</span>`;
+  }
+  const shindo = Shindo.computeShindoFromPgaG(q.d_sm_max_pga_onland);
+  if (!shindo) return `<span class="empty-note">-</span>`;
+  return `<img class="shindo-icon shindo-icon-sm" src="${shindo.iconPath}" alt="Shindo ${shindo.label}" title="Shindo ${shindo.label}">`;
+}
+
 function renderTable(quakes, onSelect) {
   const tbody = document.getElementById("eq-table-body");
   tbody.innerHTML = "";
@@ -23,6 +32,7 @@ function renderTable(quakes, onSelect) {
       <td>${fmtNum(q.latitude, 3)}, ${fmtNum(q.longitude, 3)}</td>
       <td class="${magClass}">${fmtNum(q.mag, 1)}</td>
       <td>${q.place ?? "Unknown"}</td>
+      <td>${shindoCell(q)}</td>
       <td><a href="${q.url}" target="_blank" rel="noopener" class="row-link">USGS &rarr;</a></td>
     `;
     tr.addEventListener("click", (e) => {
@@ -33,7 +43,14 @@ function renderTable(quakes, onSelect) {
   });
 }
 
-function tensorSection(detail) {
+// Dobry, Idriss & Ng (1978) magnitude-duration relation: a rough estimate of
+// how long strong shaking might last near the source, from magnitude alone.
+function estimatedShakingDuration(mag) {
+  if (mag === null || mag === undefined || Number.isNaN(mag)) return null;
+  return Math.pow(10, 0.432 * mag - 1.83);
+}
+
+function tensorSection(detail, quake) {
   if (!detail || !detail.has_moment_tensor) {
     return `<p class="empty-note">No moment tensor solution available for this event.</p>`;
   }
@@ -43,9 +60,10 @@ function tensorSection(detail) {
   const beachball = hasPlanes
     ? `<canvas id="beachball-canvas" class="beachball" width="160" height="160"></canvas>`
     : "";
+  const estDuration = estimatedShakingDuration(quake?.mag);
+
   return `
     <div class="tensor-layout">
-      ${beachball}
       <div class="grid-2">
         <div>
           <h4>Nodal Plane 1</h4>
@@ -64,6 +82,7 @@ function tensorSection(detail) {
           </dl>
         </div>
       </div>
+      ${beachball}
     </div>
     <dl>
       <dt>Scalar Moment (N&middot;m)</dt><dd>${fmtExp(detail.mt_scalar_moment)}</dd>
@@ -81,11 +100,20 @@ function tensorSection(detail) {
       <dt>Mrp</dt><dd>${fmtExp(detail.mt_tensor_mrp)}</dd>
       <dt>Mtp</dt><dd>${fmtExp(detail.mt_tensor_mtp)}</dd>
     </dl>
+    <h4>Rupture &amp; Shaking Duration</h4>
+    <dl>
+      <dt>Rupture Duration (s)</dt><dd>${fmtNum(detail.mt_sourcetime_duration, 1)}</dd>
+      <dt>Rise Time (s)</dt><dd>${fmtNum(detail.mt_sourcetime_risetime, 1)}</dd>
+      <dt>Decay Time (s)</dt><dd>${fmtNum(detail.mt_sourcetime_decaytime, 1)}</dd>
+      <dt>Source Time Function</dt><dd>${detail.mt_sourcetime_type ?? "-"}</dd>
+      <dt title="Dobry, Idriss &amp; Ng (1978) magnitude-duration relation &mdash; rough estimate, not site-specific">Est. Shaking Duration (s)</dt>
+      <dd>${estDuration !== null ? fmtNum(estDuration, 1) + " (estimate)" : "-"}</dd>
+    </dl>
   `;
 }
 
 function shindoBadge(detail) {
-  const shindo = detail?.sm_max_pga != null ? Shindo.computeShindoFromPgaG(detail.sm_max_pga) : null;
+  const shindo = detail?.sm_max_pga_onland != null ? Shindo.computeShindoFromPgaG(detail.sm_max_pga_onland) : null;
   if (!shindo) {
     return `<div class="intensity-badge"><span class="intensity-label">SHINDO</span><span class="intensity-value">-</span></div>`;
   }
@@ -98,6 +126,37 @@ function shindoBadge(detail) {
   `;
 }
 
+// Rough MMI color ramp, kept visually consistent with the Shindo icon palette.
+const MMI_COLOR_STOPS = [
+  [2, "#9E9E9E", "#fff"],
+  [4, "#4FC3F7", "#fff"],
+  [5, "#66BB6A", "#fff"],
+  [6, "#FFEE58", "#3A3200"],
+  [7, "#FFA726", "#fff"],
+  [8, "#FB8C00", "#fff"],
+  [9, "#E53935", "#fff"],
+  [10, "#B71C1C", "#fff"],
+];
+
+function mmiColors(mmi) {
+  if (mmi === null || mmi === undefined) return ["#2a2f38", "#e7eaee"];
+  for (const [max, bg, fg] of MMI_COLOR_STOPS) {
+    if (mmi < max) return [bg, fg];
+  }
+  return ["#6A1B9A", "#fff"];
+}
+
+function mmiBadge(detail) {
+  const mmi = detail?.sm_max_mmi ?? null;
+  const [bg, fg] = mmiColors(mmi);
+  return `
+    <div class="intensity-badge" style="background:${bg};color:${fg};border-color:${bg}">
+      <span class="intensity-label" style="color:${fg}">MMI</span>
+      <span class="intensity-value">${fmtNum(mmi, 1)}</span>
+    </div>
+  `;
+}
+
 function shakemapSection(detail) {
   if (!detail || !detail.has_shakemap) {
     return `<p class="empty-note">No ShakeMap available for this event.</p>`;
@@ -105,16 +164,14 @@ function shakemapSection(detail) {
   const img = detail.sm_intensity_image_url
     ? `<img class="shakemap-img" src="${detail.sm_intensity_image_url}" alt="ShakeMap intensity" loading="lazy">`
     : "";
+  const stationNote =
+    detail.sm_onland_station_count != null
+      ? `from ${detail.sm_onland_station_count} on-land station/DYFI observation(s)`
+      : "no on-land observations available";
   return `
-    <div class="intensity-row">
-      ${shindoBadge(detail)}
-      <div class="intensity-badge">
-        <span class="intensity-label">MMI</span>
-        <span class="intensity-value">${fmtNum(detail.sm_max_mmi, 1)}</span>
-      </div>
-    </div>
     <dl>
-      <dt>Max PGA (g)</dt><dd>${fmtNum(detail.sm_max_pga, 3)}</dd>
+      <dt title="Max observed/estimated PGA at on-land stations and DYFI reports, not the offshore grid peak">Max PGA, on-land (g)</dt>
+      <dd>${fmtNum(detail.sm_max_pga_onland, 3)} <span class="empty-note">(${stationNote})</span></dd>
       <dt>Max PGV (cm/s)</dt><dd>${fmtNum(detail.sm_max_pgv, 3)}</dd>
       <dt>Version</dt><dd>${detail.sm_version ?? "-"}</dd>
       <dt>Map Status</dt><dd>${detail.sm_map_status ?? "-"}</dd>
@@ -140,6 +197,10 @@ function renderDetail(quake, detail) {
 
     <section class="detail-block">
       <h3>Overview</h3>
+      <div class="intensity-row">
+        ${shindoBadge(detail)}
+        ${mmiBadge(detail)}
+      </div>
       <dl>
         <dt>Magnitude</dt><dd>${fmtNum(quake.mag, 1)} ${quake.mag_type ?? ""}</dd>
         <dt>Depth (km)</dt><dd>${fmtNum(quake.depth, 1)}</dd>
@@ -153,7 +214,7 @@ function renderDetail(quake, detail) {
 
     <section class="detail-block">
       <h3>Moment Tensor</h3>
-      ${tensorSection(detail)}
+      ${tensorSection(detail, quake)}
     </section>
 
     <section class="detail-block">

@@ -49,6 +49,7 @@ async function selectQuake(id, { forceRefreshDetail = false } = {}) {
       await EqDb.upsertDetail(id, fetched);
       detail = EqDb.getDetail(id);
       setDbStatus("Ready");
+      refreshRowJoinFields(id, detail);
     } catch (err) {
       setDbStatus(`Error fetching detail: ${err.message}`);
       console.error(err);
@@ -56,6 +57,18 @@ async function selectQuake(id, { forceRefreshDetail = false } = {}) {
   }
   EqUi.renderDetail(quake, detail);
   wireDetailRefreshButton();
+}
+
+// Keep the List/Map view's Shindo column in sync right after a detail fetch,
+// without waiting for the next full loadEarthquakes() cycle.
+function refreshRowJoinFields(id, detail) {
+  const row = currentQuakes.find((q) => q.id === id);
+  if (!row) return;
+  row.d_has_shakemap = detail?.has_shakemap ?? 0;
+  row.d_sm_max_pga_onland = detail?.sm_max_pga_onland ?? null;
+  row.d_sm_max_mmi = detail?.sm_max_mmi ?? null;
+  EqUi.renderTable(currentQuakes, (qid) => selectQuake(qid));
+  EqMap.renderMap(currentQuakes, (qid) => selectQuake(qid));
 }
 
 function wireDetailRefreshButton() {

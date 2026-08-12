@@ -36,10 +36,16 @@ CREATE TABLE IF NOT EXISTS earthquake_details (
   mt_tensor_mrr REAL, mt_tensor_mtt REAL, mt_tensor_mpp REAL,
   mt_tensor_mrt REAL, mt_tensor_mrp REAL, mt_tensor_mtp REAL,
   mt_beachball_source TEXT,
+  mt_sourcetime_duration REAL,
+  mt_sourcetime_risetime REAL,
+  mt_sourcetime_decaytime REAL,
+  mt_sourcetime_type TEXT,
   mt_raw_json TEXT,
   has_shakemap INTEGER DEFAULT 0,
   sm_max_mmi REAL,
   sm_max_pga REAL,
+  sm_max_pga_onland REAL,
+  sm_onland_station_count INTEGER,
   sm_max_pgv REAL,
   sm_version INTEGER,
   sm_map_status TEXT,
@@ -48,6 +54,27 @@ CREATE TABLE IF NOT EXISTS earthquake_details (
   detail_fetched_at INTEGER
 );
 `;
+
+// earthquake_details columns added after the initial release; applied to
+// already-existing local .sqlite files since CREATE TABLE IF NOT EXISTS
+// is a no-op once the table exists.
+const DETAIL_COLUMN_MIGRATIONS = {
+  mt_sourcetime_duration: "REAL",
+  mt_sourcetime_risetime: "REAL",
+  mt_sourcetime_decaytime: "REAL",
+  mt_sourcetime_type: "TEXT",
+  sm_max_pga_onland: "REAL",
+  sm_onland_station_count: "INTEGER",
+};
+
+function migrateDetailsTable() {
+  const existingCols = new Set(all("PRAGMA table_info(earthquake_details)").map((r) => r.name));
+  for (const [name, type] of Object.entries(DETAIL_COLUMN_MIGRATIONS)) {
+    if (!existingCols.has(name)) {
+      run(`ALTER TABLE earthquake_details ADD COLUMN ${name} ${type}`);
+    }
+  }
+}
 
 let SQL = null;
 let sqlDb = null;
@@ -77,6 +104,7 @@ async function loadDatabaseFromHandle(handle) {
   const buf = await file.arrayBuffer();
   sqlDb = buf.byteLength > 0 ? new SQL.Database(new Uint8Array(buf)) : new SQL.Database();
   sqlDb.run(SCHEMA);
+  migrateDetailsTable();
   fileHandle = handle;
   await persist();
   return { name: file.name };
@@ -158,7 +186,15 @@ async function upsertEarthquake(q, { force = false, skipPersist = false } = {}) 
 }
 
 function getEarthquakes(sinceMs) {
-  return all("SELECT * FROM earthquakes WHERE time >= ? ORDER BY time DESC", [sinceMs]);
+  return all(
+    `SELECT e.*, d.has_shakemap AS d_has_shakemap, d.sm_max_pga_onland AS d_sm_max_pga_onland,
+            d.sm_max_mmi AS d_sm_max_mmi
+     FROM earthquakes e
+     LEFT JOIN earthquake_details d ON d.id = e.id
+     WHERE e.time >= ?
+     ORDER BY e.time DESC`,
+    [sinceMs]
+  );
 }
 
 function getDetail(id) {
@@ -171,10 +207,12 @@ async function upsertDetail(id, d) {
        id, has_moment_tensor, mt_np1_strike, mt_np1_dip, mt_np1_rake, mt_np2_strike, mt_np2_dip, mt_np2_rake,
        mt_scalar_moment, mt_percent_double_couple, mt_derived_magnitude, mt_derived_depth,
        mt_tensor_mrr, mt_tensor_mtt, mt_tensor_mpp, mt_tensor_mrt, mt_tensor_mrp, mt_tensor_mtp,
-       mt_beachball_source, mt_raw_json,
-       has_shakemap, sm_max_mmi, sm_max_pga, sm_max_pgv, sm_version, sm_map_status, sm_intensity_image_url, sm_raw_json,
+       mt_beachball_source, mt_sourcetime_duration, mt_sourcetime_risetime, mt_sourcetime_decaytime,
+       mt_sourcetime_type, mt_raw_json,
+       has_shakemap, sm_max_mmi, sm_max_pga, sm_max_pga_onland, sm_onland_station_count, sm_max_pgv,
+       sm_version, sm_map_status, sm_intensity_image_url, sm_raw_json,
        detail_fetched_at
-     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(id) DO UPDATE SET
        has_moment_tensor=excluded.has_moment_tensor, mt_np1_strike=excluded.mt_np1_strike, mt_np1_dip=excluded.mt_np1_dip,
        mt_np1_rake=excluded.mt_np1_rake, mt_np2_strike=excluded.mt_np2_strike, mt_np2_dip=excluded.mt_np2_dip,
@@ -182,8 +220,12 @@ async function upsertDetail(id, d) {
        mt_percent_double_couple=excluded.mt_percent_double_couple, mt_derived_magnitude=excluded.mt_derived_magnitude,
        mt_derived_depth=excluded.mt_derived_depth, mt_tensor_mrr=excluded.mt_tensor_mrr, mt_tensor_mtt=excluded.mt_tensor_mtt,
        mt_tensor_mpp=excluded.mt_tensor_mpp, mt_tensor_mrt=excluded.mt_tensor_mrt, mt_tensor_mrp=excluded.mt_tensor_mrp,
-       mt_tensor_mtp=excluded.mt_tensor_mtp, mt_beachball_source=excluded.mt_beachball_source, mt_raw_json=excluded.mt_raw_json,
+       mt_tensor_mtp=excluded.mt_tensor_mtp, mt_beachball_source=excluded.mt_beachball_source,
+       mt_sourcetime_duration=excluded.mt_sourcetime_duration, mt_sourcetime_risetime=excluded.mt_sourcetime_risetime,
+       mt_sourcetime_decaytime=excluded.mt_sourcetime_decaytime, mt_sourcetime_type=excluded.mt_sourcetime_type,
+       mt_raw_json=excluded.mt_raw_json,
        has_shakemap=excluded.has_shakemap, sm_max_mmi=excluded.sm_max_mmi, sm_max_pga=excluded.sm_max_pga,
+       sm_max_pga_onland=excluded.sm_max_pga_onland, sm_onland_station_count=excluded.sm_onland_station_count,
        sm_max_pgv=excluded.sm_max_pgv, sm_version=excluded.sm_version, sm_map_status=excluded.sm_map_status,
        sm_intensity_image_url=excluded.sm_intensity_image_url, sm_raw_json=excluded.sm_raw_json,
        detail_fetched_at=excluded.detail_fetched_at`,
@@ -195,8 +237,10 @@ async function upsertDetail(id, d) {
       d.mt?.derivedMagnitude ?? null, d.mt?.derivedDepth ?? null,
       d.mt?.tensorMrr ?? null, d.mt?.tensorMtt ?? null, d.mt?.tensorMpp ?? null,
       d.mt?.tensorMrt ?? null, d.mt?.tensorMrp ?? null, d.mt?.tensorMtp ?? null,
-      d.mt?.beachballSource ?? null, d.mt ? JSON.stringify(d.mt.raw) : null,
-      d.hasShakemap ? 1 : 0, d.sm?.maxMmi ?? null, d.sm?.maxPga ?? null, d.sm?.maxPgv ?? null,
+      d.mt?.beachballSource ?? null, d.mt?.sourcetimeDuration ?? null, d.mt?.sourcetimeRisetime ?? null,
+      d.mt?.sourcetimeDecaytime ?? null, d.mt?.sourcetimeType ?? null, d.mt ? JSON.stringify(d.mt.raw) : null,
+      d.hasShakemap ? 1 : 0, d.sm?.maxMmi ?? null, d.sm?.maxPga ?? null, d.sm?.maxPgaOnland ?? null,
+      d.sm?.onlandStationCount ?? null, d.sm?.maxPgv ?? null,
       d.sm?.version ?? null, d.sm?.mapStatus ?? null, d.sm?.intensityImageUrl ?? null,
       d.sm ? JSON.stringify(d.sm.raw) : null,
       Date.now(),
