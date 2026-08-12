@@ -16,14 +16,6 @@
 
 <main>
   <section id="controls">
-    <label for="days-select">Time range:</label>
-    <select id="days-select">
-      <option value="7">Past 7 days</option>
-      <option value="30">Past 30 days</option>
-      <option value="90" selected>Past 90 days</option>
-      <option value="365">Past year</option>
-      <option value="all">All time</option>
-    </select>
     <button id="fetch-new-btn" title="Check USGS for new or updated earthquakes and fetch technical details only for those - skips events already cached. Only covers the past 365 days; use the USGS event ID lookup below for older earthquakes.">Fetch New</button>
     <button id="refetch-all-btn" title="Force refetch the full earthquake list and all technical details (moment tensor, ShakeMap) from USGS, even if already cached. Only covers the past 365 days; use the USGS event ID lookup below for older earthquakes.">Re-fetch All</button>
     <button id="time-toggle-btn" title="Toggle displayed times between UTC and your local timezone - all data is always stored in UTC">Time: UTC</button>

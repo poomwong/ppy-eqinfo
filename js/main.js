@@ -6,7 +6,6 @@
 // --- DOM references ---------------------------------------------------
 const statusEl = document.getElementById("status");
 const dbStatusEl = document.getElementById("db-status");
-const daysSelect = document.getElementById("days-select");
 const fetchNewBtn = document.getElementById("fetch-new-btn");
 const refetchAllBtn = document.getElementById("refetch-all-btn");
 const timeToggleBtn = document.getElementById("time-toggle-btn");
@@ -252,7 +251,6 @@ function updateSyncCooldownUi() {
 }
 
 function setControlsEnabled(enabled) {
-  daysSelect.disabled = !enabled;
   if (enabled) {
     fetchNewBtn.disabled = false;
     updateSyncCooldownUi();
@@ -271,12 +269,11 @@ function switchTab(tab) {
 }
 
 // --- Rendering & selection -------------------------------------------
-// Pure local render: re-query the already-cached SQLite data for the
-// currently selected day range and redraw the list/map/detail panel.
-// Never touches the network.
+// Pure local render: re-query the entire cached SQLite database (search and
+// pagination handle narrowing what's actually shown) and redraw the
+// list/map/detail panel. Never touches the network.
 function renderFromDb() {
-  const sinceMs = daysSelect.value === "all" ? 0 : Date.now() - Number(daysSelect.value) * 24 * 60 * 60 * 1000;
-  currentQuakes = EqDb.getEarthquakes(sinceMs);
+  currentQuakes = EqDb.getEarthquakes(0);
   sortCurrentQuakes();
   updateSortIndicators();
   visibleCount = PAGE_SIZE;
@@ -410,9 +407,6 @@ async function lookupEvent(id) {
     const fetched = await UsgsApi.fetchDetail(quake.detailUrl || quake.id);
     await EqDb.upsertDetail(quake.id, fetched);
     lookupStatusEl.textContent = `Saved: ${quake.place ?? trimmedId}`;
-    // Switch to "All time" so the looked-up event is guaranteed visible even
-    // if it's older than the currently selected day range.
-    daysSelect.value = "all";
     renderFromDb();
     selectQuake(quake.id);
   } catch (err) {
@@ -570,7 +564,6 @@ dbExportBtn.addEventListener("click", () => EqDb.exportSqliteFile());
 
 fetchNewBtn.addEventListener("click", () => fullSync({ force: false }));
 refetchAllBtn.addEventListener("click", () => fullSync({ force: true }));
-daysSelect.addEventListener("change", () => renderFromDb());
 tabListBtn.addEventListener("click", () => switchTab("list"));
 tabDetailBtn.addEventListener("click", () => switchTab("detail"));
 wireSortHeaders();
