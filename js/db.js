@@ -175,10 +175,28 @@ async function connectNew() {
   return loadDatabaseFromHandle(handle);
 }
 
+// Runs on page load with no user gesture, so it must NEVER call
+// requestPermission() - browsers require a user activation for that and
+// will just silently refuse (or throw) otherwise. Only queryPermission()
+// (which needs no gesture) is safe here. If the browser already remembers
+// this handle as granted (which Chrome/Edge normally do across restarts),
+// this fully auto-connects with zero clicks. Otherwise it hands back the
+// known handle so the UI can offer a single "Reconnect" button - no need to
+// re-pick the file via the native dialog, just re-confirm permission.
 async function reconnectSaved() {
   const handle = await window.HandleStore.loadHandle();
-  if (!handle) return null;
-  if (!(await verifyPermission(handle, true))) return null;
+  if (!handle) return { status: "no-handle" };
+  const granted = (await handle.queryPermission({ mode: "readwrite" })) === "granted";
+  if (!granted) return { status: "needs-permission", handle };
+  const info = await loadDatabaseFromHandle(handle);
+  return { status: "connected", name: info.name };
+}
+
+// The click-triggered counterpart to the "needs-permission" case above -
+// safe to call requestPermission() here since it's in direct response to a
+// user gesture.
+async function reconnectWithPermission(handle) {
+  if (!(await verifyPermission(handle, true))) throw new Error("Permission denied");
   return loadDatabaseFromHandle(handle);
 }
 
@@ -296,6 +314,7 @@ window.EqDb = {
   connectExisting,
   connectNew,
   reconnectSaved,
+  reconnectWithPermission,
   upsertEarthquake,
   getEarthquakes,
   getDetail,
