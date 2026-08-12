@@ -212,6 +212,7 @@ function renderDetail(quake, detail) {
         ${mmiBadge(detail)}
       </div>
       <dl>
+        <dt>USGS Event ID</dt><dd>${quake.id ?? "-"}</dd>
         <dt>Magnitude</dt><dd>${fmtNum(quake.mag, 1)} ${quake.mag_type ?? ""}</dd>
         <dt>Depth (km)</dt><dd>${fmtNum(quake.depth, 1)}</dd>
         <dt>Coordinates</dt><dd>${fmtNum(quake.latitude, 4)}, ${fmtNum(quake.longitude, 4)}</dd>
