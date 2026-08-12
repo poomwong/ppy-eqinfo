@@ -40,7 +40,7 @@ async function selectQuake(id, { forceRefreshDetail = false } = {}) {
   switchTab("detail");
 
   let detail = EqDb.getDetail(id);
-  if (!detail || forceRefreshDetail) {
+  if (EqDb.needsDetailRefresh(detail) || forceRefreshDetail) {
     EqUi.renderDetail(quake, detail);
     document.getElementById("detail-refresh-btn")?.setAttribute("disabled", "true");
     setDbStatus(forceRefreshDetail ? "Refetching earthquake detail..." : "Fetching earthquake detail...");
