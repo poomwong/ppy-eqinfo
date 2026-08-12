@@ -12,12 +12,11 @@ function fmtExp(v) {
 }
 
 function shindoCell(q) {
-  const picked = q.d_has_shakemap ? Shindo.pickOnlandPga(q) : null;
+  const picked = q.d_has_shakemap ? Shindo.primaryOnlandPga(q) : null;
   if (!picked) return `<span class="empty-note">-</span>`;
   const shindo = Shindo.computeShindoFromPgaG(picked.pgaG);
   if (!shindo) return `<span class="empty-note">-</span>`;
-  const title = `Shindo ${shindo.label} (${picked.source === "official" ? "official station" : "DYFI estimate"})`;
-  return `<img class="shindo-icon shindo-icon-sm" src="${shindo.iconPath}" alt="Shindo ${shindo.label}" title="${title}">`;
+  return `<img class="shindo-icon shindo-icon-sm" src="${shindo.iconPath}" alt="Shindo ${shindo.label}" title="Shindo ${shindo.label} (USGS reported PGA)">`;
 }
 
 function renderTable(quakes, onSelect) {
@@ -108,16 +107,31 @@ function tensorSection(detail, quake) {
 }
 
 function shindoBadge(detail) {
-  const picked = detail?.has_shakemap ? Shindo.pickOnlandPga(detail) : null;
+  const picked = detail?.has_shakemap ? Shindo.primaryOnlandPga(detail) : null;
   const shindo = picked ? Shindo.computeShindoFromPgaG(picked.pgaG) : null;
   if (!shindo) {
     return `<div class="intensity-badge"><span class="intensity-label">SHINDO</span><span class="intensity-value">-</span></div>`;
   }
-  const sourceNote = picked.source === "official" ? "official station" : "DYFI estimate";
   return `
-    <div class="intensity-badge" title="From ${sourceNote}">
+    <div class="intensity-badge" title="From USGS-reported PGA (${fmtNum(picked.pgaG, 3)}g)">
       <img class="shindo-icon" src="${shindo.iconPath}" alt="Shindo ${shindo.label}">
       <span class="intensity-label">SHINDO</span>
+      <span class="intensity-value">${shindo.label}</span>
+    </div>
+  `;
+}
+
+// Secondary reference badge shown alongside the primary one whenever an
+// on-land DYFI-derived PGA is available - not a substitute for the primary
+// USGS-sourced figure, just a second data point for comparison.
+function dyfiShindoBadge(detail) {
+  const picked = detail?.has_shakemap ? Shindo.dyfiOnlandPga(detail) : null;
+  const shindo = picked ? Shindo.computeShindoFromPgaG(picked.pgaG) : null;
+  if (!shindo) return "";
+  return `
+    <div class="intensity-badge" title="From on-land DYFI 'Did You Feel It?' reports (${fmtNum(picked.pgaG, 3)}g) - reference only">
+      <img class="shindo-icon" src="${shindo.iconPath}" alt="Shindo ${shindo.label} (DYFI)">
+      <span class="intensity-label">SHINDO (DYFI)</span>
       <span class="intensity-value">${shindo.label}</span>
     </div>
   `;
@@ -163,26 +177,25 @@ function shakemapSection(detail) {
     : "";
   const officialCount = detail.sm_onland_station_count ?? 0;
   const dyfiCount = detail.sm_onland_dyfi_station_count ?? 0;
-
-  const picked = Shindo.pickOnlandPga(detail);
-  const pickedLabel = picked
-    ? `${fmtNum(picked.pgaG, 3)} <span class="empty-note">(chosen source: ${
-        picked.source === "official" ? `official, ${officialCount} station(s)` : `DYFI, ${dyfiCount} report(s)`
-      })</span>`
-    : `<span class="empty-note">no on-land data available</span>`;
+  const dyfiPicked = Shindo.dyfiOnlandPga(detail);
+  const dyfiBadge = dyfiPicked ? dyfiShindoBadge(detail) : "";
 
   return `
+    <div class="intensity-row">
+      ${shindoBadge(detail)}
+      ${dyfiBadge}
+    </div>
     <dl>
       <dt title="The preferred/official ShakeMap submission's own version counter - bumps each time USGS revises this ShakeMap">ShakeMap Version</dt>
       <dd>v${detail.sm_version ?? "-"}</dd>
       <dt title="The ShakeMap product's own reference point, from the shakemap[] entry - may differ slightly from the origin location">ShakeMap Epicenter</dt>
       <dd>${fmtNum(detail.sm_latitude, 4)}, ${fmtNum(detail.sm_longitude, 4)}</dd>
-      <dt title="The headline on-land PGA figure: official if its network has enough stations to be representative, otherwise whichever of official/DYFI reads higher">Max PGA, on-land (g)</dt>
-      <dd>${pickedLabel}</dd>
-      <dt title="Raw max PGA from real on-land seismic instruments, regardless of how many stations reported">&nbsp;&nbsp;&mdash; official (g)</dt>
-      <dd>${fmtNum(detail.sm_max_pga_onland, 3)} <span class="empty-note">(${officialCount} station(s))</span></dd>
-      <dt title="Raw max PGA estimated from on-land 'Did You Feel It?' crowd reports">&nbsp;&nbsp;&mdash; DYFI (g)</dt>
+      <dt title="USGS's own reported max PGA (properties.maxpga on the ShakeMap product) - our main source of truth, not the raw maxpga-grid value which can spike unrealistically over an unconstrained rupture">Max PGA, USGS-reported (g)</dt>
+      <dd>${fmtNum(detail.sm_max_pga, 3)}</dd>
+      <dt title="Reference only: max PGA estimated from on-land 'Did You Feel It?' crowd reports, from our own stationlist.json parsing">Max PGA, on-land DYFI (g)</dt>
       <dd>${fmtNum(detail.sm_max_pga_onland_dyfi, 3)} <span class="empty-note">(${dyfiCount} report(s))</span></dd>
+      <dt title="Reference only: max PGA from real on-land seismic instruments in the stationlist, from our own parsing - may be sparse/unrepresentative for remote events">Max PGA, on-land official stations (g)</dt>
+      <dd>${fmtNum(detail.sm_max_pga_onland, 3)} <span class="empty-note">(${officialCount} station(s))</span></dd>
       <dt>Max PGV (cm/s)</dt><dd>${fmtNum(detail.sm_max_pgv, 3)}</dd>
       <dt>Map Status</dt><dd>${detail.sm_map_status ?? "-"}</dd>
     </dl>
