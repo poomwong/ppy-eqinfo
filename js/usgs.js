@@ -78,10 +78,22 @@ function parseMomentTensor(product) {
   };
 }
 
+// products[type] can contain more than one submission for the same event
+// (e.g. multiple contributing networks). USGS's own site resolves this via
+// preferredWeight - the highest-weighted entry is the official/canonical one.
+function pickPreferredProduct(products) {
+  if (!products || products.length === 0) return null;
+  return products.reduce((best, p) =>
+    (p.preferredWeight ?? 0) > (best.preferredWeight ?? 0) ? p : best
+  );
+}
+
 function parseShakemap(product) {
   const p = product.properties;
   const intensityContent = product.contents?.["download/intensity.jpg"];
   return {
+    latitude: num(p["latitude"]),
+    longitude: num(p["longitude"]),
     maxMmi: num(p["maxmmi"]),
     maxPga: num(p["maxpga"]),
     maxPgv: num(p["maxpgv"]),
@@ -135,8 +147,8 @@ async function fetchDetail(idOrUrl) {
   if (!res.ok) throw new Error(`USGS detail request failed: ${res.status}`);
   const data = await res.json();
   const products = data.properties.products || {};
-  const mtProduct = products["moment-tensor"]?.[0];
-  const smProduct = products["shakemap"]?.[0];
+  const mtProduct = pickPreferredProduct(products["moment-tensor"]);
+  const smProduct = pickPreferredProduct(products["shakemap"]);
 
   const sm = smProduct ? parseShakemap(smProduct) : null;
   if (sm) {

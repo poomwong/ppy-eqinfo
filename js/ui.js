@@ -170,12 +170,15 @@ function shakemapSection(detail) {
   const dyfiCount = detail.sm_onland_dyfi_station_count ?? 0;
   return `
     <dl>
+      <dt title="The preferred/official ShakeMap submission's own version counter - bumps each time USGS revises this ShakeMap">ShakeMap Version</dt>
+      <dd>v${detail.sm_version ?? "-"}</dd>
+      <dt title="The ShakeMap product's own reference point, from the shakemap[] entry - may differ slightly from the origin location">ShakeMap Epicenter</dt>
+      <dd>${fmtNum(detail.sm_latitude, 4)}, ${fmtNum(detail.sm_longitude, 4)}</dd>
       <dt title="Max PGA from real on-land seismic instruments - the authoritative value">Max PGA, on-land, official (g)</dt>
       <dd>${fmtNum(detail.sm_max_pga_onland, 3)} <span class="empty-note">(${officialCount} station(s))</span></dd>
       <dt title="Max PGA estimated from on-land 'Did You Feel It?' crowd reports - used only as a fallback/reference">Max PGA, on-land, DYFI (g)</dt>
       <dd>${fmtNum(detail.sm_max_pga_onland_dyfi, 3)} <span class="empty-note">(${dyfiCount} report(s))</span></dd>
       <dt>Max PGV (cm/s)</dt><dd>${fmtNum(detail.sm_max_pgv, 3)}</dd>
-      <dt>Version</dt><dd>${detail.sm_version ?? "-"}</dd>
       <dt>Map Status</dt><dd>${detail.sm_map_status ?? "-"}</dd>
     </dl>
     ${img}

@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS earthquake_details (
   mt_sourcetime_type TEXT,
   mt_raw_json TEXT,
   has_shakemap INTEGER DEFAULT 0,
+  sm_latitude REAL,
+  sm_longitude REAL,
   sm_max_mmi REAL,
   sm_max_pga REAL,
   sm_max_pga_onland REAL,
@@ -70,7 +72,13 @@ CREATE TABLE IF NOT EXISTS earthquake_details (
 // seismic instrument, non-DYFI) on-land PGA - version 3 changed their
 // meaning from "all on-land observations" to "official only" and added the
 // separate sm_max_pga_onland_dyfi columns, so existing rows must re-fetch.
-const CURRENT_DETAIL_SCHEMA_VERSION = 3;
+//
+// Version 4 added sm_latitude/sm_longitude (the ShakeMap product's own
+// reference point, not necessarily identical to the origin location) and
+// switched moment-tensor/shakemap product selection to preferredWeight
+// (USGS's own "which submission is canonical" signal) instead of always
+// taking array index 0.
+const CURRENT_DETAIL_SCHEMA_VERSION = 4;
 
 // earthquake_details columns added after the initial release; applied to
 // already-existing local .sqlite files since CREATE TABLE IF NOT EXISTS
@@ -80,6 +88,8 @@ const DETAIL_COLUMN_MIGRATIONS = {
   mt_sourcetime_risetime: "REAL",
   mt_sourcetime_decaytime: "REAL",
   mt_sourcetime_type: "TEXT",
+  sm_latitude: "REAL",
+  sm_longitude: "REAL",
   sm_max_pga_onland: "REAL",
   sm_onland_station_count: "INTEGER",
   sm_max_pga_onland_dyfi: "REAL",
@@ -236,11 +246,11 @@ async function upsertDetail(id, d, { skipPersist = false } = {}) {
        mt_tensor_mrr, mt_tensor_mtt, mt_tensor_mpp, mt_tensor_mrt, mt_tensor_mrp, mt_tensor_mtp,
        mt_beachball_source, mt_sourcetime_duration, mt_sourcetime_risetime, mt_sourcetime_decaytime,
        mt_sourcetime_type, mt_raw_json,
-       has_shakemap, sm_max_mmi, sm_max_pga, sm_max_pga_onland, sm_onland_station_count,
+       has_shakemap, sm_latitude, sm_longitude, sm_max_mmi, sm_max_pga, sm_max_pga_onland, sm_onland_station_count,
        sm_max_pga_onland_dyfi, sm_onland_dyfi_station_count, sm_max_pgv,
        sm_version, sm_map_status, sm_intensity_image_url, sm_raw_json,
        detail_fetched_at, detail_schema_version
-     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(id) DO UPDATE SET
        has_moment_tensor=excluded.has_moment_tensor, mt_np1_strike=excluded.mt_np1_strike, mt_np1_dip=excluded.mt_np1_dip,
        mt_np1_rake=excluded.mt_np1_rake, mt_np2_strike=excluded.mt_np2_strike, mt_np2_dip=excluded.mt_np2_dip,
@@ -252,7 +262,8 @@ async function upsertDetail(id, d, { skipPersist = false } = {}) {
        mt_sourcetime_duration=excluded.mt_sourcetime_duration, mt_sourcetime_risetime=excluded.mt_sourcetime_risetime,
        mt_sourcetime_decaytime=excluded.mt_sourcetime_decaytime, mt_sourcetime_type=excluded.mt_sourcetime_type,
        mt_raw_json=excluded.mt_raw_json,
-       has_shakemap=excluded.has_shakemap, sm_max_mmi=excluded.sm_max_mmi, sm_max_pga=excluded.sm_max_pga,
+       has_shakemap=excluded.has_shakemap, sm_latitude=excluded.sm_latitude, sm_longitude=excluded.sm_longitude,
+       sm_max_mmi=excluded.sm_max_mmi, sm_max_pga=excluded.sm_max_pga,
        sm_max_pga_onland=excluded.sm_max_pga_onland, sm_onland_station_count=excluded.sm_onland_station_count,
        sm_max_pga_onland_dyfi=excluded.sm_max_pga_onland_dyfi, sm_onland_dyfi_station_count=excluded.sm_onland_dyfi_station_count,
        sm_max_pgv=excluded.sm_max_pgv, sm_version=excluded.sm_version, sm_map_status=excluded.sm_map_status,
@@ -268,7 +279,8 @@ async function upsertDetail(id, d, { skipPersist = false } = {}) {
       d.mt?.tensorMrt ?? null, d.mt?.tensorMrp ?? null, d.mt?.tensorMtp ?? null,
       d.mt?.beachballSource ?? null, d.mt?.sourcetimeDuration ?? null, d.mt?.sourcetimeRisetime ?? null,
       d.mt?.sourcetimeDecaytime ?? null, d.mt?.sourcetimeType ?? null, d.mt ? JSON.stringify(d.mt.raw) : null,
-      d.hasShakemap ? 1 : 0, d.sm?.maxMmi ?? null, d.sm?.maxPga ?? null, d.sm?.officialMaxPgaOnland ?? null,
+      d.hasShakemap ? 1 : 0, d.sm?.latitude ?? null, d.sm?.longitude ?? null,
+      d.sm?.maxMmi ?? null, d.sm?.maxPga ?? null, d.sm?.officialMaxPgaOnland ?? null,
       d.sm?.officialOnlandStationCount ?? null, d.sm?.dyfiMaxPgaOnland ?? null, d.sm?.dyfiOnlandStationCount ?? null,
       d.sm?.maxPgv ?? null,
       d.sm?.version ?? null, d.sm?.mapStatus ?? null, d.sm?.intensityImageUrl ?? null,
