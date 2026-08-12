@@ -28,7 +28,7 @@ function alertCell(q) {
 
 function tsunamiCell(q) {
   return q.tsunami
-    ? `<img class="tsunami-icon" src="icons/hazard/tsunami.svg" alt="Tsunami warning" title="Tsunami warning was issued for this event">`
+    ? `<span class="alert-dot" style="background:#E53935" title="Tsunami warning was issued for this event"></span>`
     : "";
 }
 

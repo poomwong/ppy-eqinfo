@@ -21,6 +21,8 @@ const locationLatInput = document.getElementById("location-lat");
 const locationLonInput = document.getElementById("location-lon");
 const locationAmplifyInput = document.getElementById("location-amplify");
 const locationApplyBtn = document.getElementById("location-apply-btn");
+const loadMoreLink = document.getElementById("load-more-link");
+const searchInput = document.getElementById("location-search-input");
 
 const LOCATION_COOKIE = "eqinfo_location";
 const BANGKOK_DEFAULT_LOCATION = { lat: 13.7563, lon: 100.5018, amplify: false };
@@ -116,6 +118,44 @@ function sortCurrentQuakes() {
   currentQuakes.sort(compareQuakes);
 }
 
+// Free-text location search (case-insensitive substring match against
+// place), applied on top of the sorted currentQuakes before pagination or
+// map rendering - so the list, its page count, and the map markers all stay
+// consistent with what's actually being searched for.
+let searchQuery = "";
+
+function getSearchFiltered() {
+  if (!searchQuery) return currentQuakes;
+  return currentQuakes.filter((q) => (q.place || "").toLowerCase().includes(searchQuery));
+}
+
+// Pagination: only the table is paginated (the map always shows every
+// matching quake - hiding markers based on a list page would be confusing).
+// Resets to one page on fresh data or a new search, but survives a sort
+// re-render so re-sorting doesn't collapse an already-expanded list.
+const PAGE_SIZE = 20;
+let visibleCount = PAGE_SIZE;
+
+function updateLoadMoreLink(filteredTotal) {
+  const remaining = filteredTotal - visibleCount;
+  if (remaining <= 0) {
+    loadMoreLink.classList.add("hidden");
+    return;
+  }
+  loadMoreLink.classList.remove("hidden");
+  loadMoreLink.textContent = `Load ${Math.min(PAGE_SIZE, remaining)} more (${remaining} remaining) ↓`;
+}
+
+function renderVisibleTable() {
+  const filtered = getSearchFiltered();
+  EqUi.renderTable(filtered.slice(0, visibleCount), (id) => selectQuake(id), targetLocation);
+  updateLoadMoreLink(filtered.length);
+}
+
+function renderFilteredMap() {
+  EqMap.renderMap(getSearchFiltered(), (id) => selectQuake(id));
+}
+
 function updateSortIndicators() {
   document.querySelectorAll("th.sortable").forEach((th) => {
     const indicator = th.querySelector(".sort-indicator");
@@ -136,7 +176,7 @@ function wireSortHeaders() {
       }
       sortCurrentQuakes();
       updateSortIndicators();
-      EqUi.renderTable(currentQuakes, (id) => selectQuake(id), targetLocation);
+      renderVisibleTable();
     });
   });
 }
@@ -167,8 +207,9 @@ function renderFromDb() {
   currentQuakes = EqDb.getEarthquakes(sinceMs);
   sortCurrentQuakes();
   updateSortIndicators();
-  EqUi.renderTable(currentQuakes, (id) => selectQuake(id), targetLocation);
-  EqMap.renderMap(currentQuakes, (id) => selectQuake(id));
+  visibleCount = PAGE_SIZE;
+  renderVisibleTable();
+  renderFilteredMap();
 
   if (selectedId) {
     const stillThere = currentQuakes.find((q) => q.id === selectedId);
@@ -461,3 +502,16 @@ locationLatInput.value = targetLocation.lat;
 locationLonInput.value = targetLocation.lon;
 locationAmplifyInput.checked = targetLocation.amplify;
 updateLocationToggleLabel();
+
+loadMoreLink.addEventListener("click", (e) => {
+  e.preventDefault();
+  visibleCount += PAGE_SIZE;
+  renderVisibleTable();
+});
+
+searchInput.addEventListener("input", () => {
+  searchQuery = searchInput.value.trim().toLowerCase();
+  visibleCount = PAGE_SIZE;
+  renderVisibleTable();
+  renderFilteredMap();
+});

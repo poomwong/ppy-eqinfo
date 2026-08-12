@@ -80,6 +80,28 @@ main {
   font-size: 0.85rem;
 }
 
+#search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+#search-bar label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+#location-search-input {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.9rem;
+  width: 220px;
+}
+
 #location-control {
   position: relative;
 }
@@ -162,6 +184,16 @@ button:hover {
   border-radius: 8px;
   border: 1px solid var(--border);
   margin-bottom: 1.5rem;
+}
+
+#load-more-wrap {
+  text-align: center;
+  margin: 0.9rem 0 0;
+}
+
+#load-more-link {
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 #list-section {
@@ -494,12 +526,6 @@ dd {
 .tsunami-cell,
 .alert-cell {
   text-align: center;
-}
-
-.tsunami-icon {
-  width: 22px;
-  height: 22px;
-  vertical-align: middle;
 }
 
 .map-popup {
