@@ -1,3 +1,8 @@
+// Renders a focal mechanism beachball onto a <canvas>, from a moment
+// tensor's two nodal planes (strike/dip only - rake isn't needed here since
+// both planes' normals fully determine the compressional/dilatational
+// pattern). Lower-hemisphere equal-area projection, rasterized per-pixel.
+
 function toRad(deg) {
   return (deg * Math.PI) / 180;
 }

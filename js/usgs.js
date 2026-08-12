@@ -1,3 +1,7 @@
+// All USGS network access lives here: the summary feed, single-event
+// lookups, and per-event detail (moment tensor, ShakeMap, on-land PGA from
+// the station list). Returns plain normalized objects - no DOM/DB coupling.
+
 const USGS_ENDPOINT = "https://earthquake.usgs.gov/fdsnws/event/1/query";
 const MIN_MAGNITUDE = 6.0;
 

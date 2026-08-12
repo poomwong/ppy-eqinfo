@@ -1,3 +1,9 @@
+// App orchestrator: owns all mutable state (loaded quakes, sort/search/
+// pagination, target location, DB connection) and wires up every control.
+// EqDb/UsgsApi do the actual work; EqUi/EqMap only render what they're
+// given. Sections below follow the order controls appear on the page.
+
+// --- DOM references ---------------------------------------------------
 const statusEl = document.getElementById("status");
 const dbStatusEl = document.getElementById("db-status");
 const daysSelect = document.getElementById("days-select");
@@ -24,21 +30,12 @@ const locationApplyBtn = document.getElementById("location-apply-btn");
 const loadMoreLink = document.getElementById("load-more-link");
 const searchInput = document.getElementById("location-search-input");
 
+// --- Target location (cookie-persisted) ---------------------------------
 const LOCATION_COOKIE = "eqinfo_location";
 const BANGKOK_DEFAULT_LOCATION = { lat: 13.7563, lon: 100.5018, amplify: false };
 
-function readCookie(name) {
-  const match = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-function writeCookie(name, value, days) {
-  const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
-  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}`;
-}
-
 function loadTargetLocation() {
-  const raw = readCookie(LOCATION_COOKIE);
+  const raw = Cookies.readCookie(LOCATION_COOKIE);
   if (!raw) return { ...BANGKOK_DEFAULT_LOCATION };
   try {
     const parsed = JSON.parse(raw);
@@ -52,7 +49,7 @@ function loadTargetLocation() {
 }
 
 function saveTargetLocation() {
-  writeCookie(LOCATION_COOKIE, JSON.stringify(targetLocation), 365);
+  Cookies.writeCookie(LOCATION_COOKIE, JSON.stringify(targetLocation), 365);
 }
 
 // Target location for the local MMI / long-period estimate, remembered
@@ -60,6 +57,7 @@ function saveTargetLocation() {
 // need re-entering every time the page opens.
 let targetLocation = loadTargetLocation();
 
+// --- Core state ----------------------------------------------------------
 // The network sync (page load / "Refresh All") always pulls the widest
 // available window, regardless of which range is selected in the dropdown -
 // that way switching the dropdown is a pure local DB query with zero USGS
@@ -71,8 +69,9 @@ let dbReady = false;
 let selectedId = null;
 let currentQuakes = [];
 
-// Table sort state. Deliberately just an in-memory variable, not persisted
-// anywhere - resets to the default (most recent first) on every page load,
+// --- Table sort ------------------------------------------------------
+// Deliberately just an in-memory variable, not persisted anywhere -
+// resets to the default (most recent first) on every page load,
 // as requested, while still surviving re-renders within the same session
 // (Fetch New, day-range changes, etc.).
 const ALERT_RANK = { green: 1, yellow: 2, orange: 3, red: 4 };
@@ -118,22 +117,28 @@ function sortCurrentQuakes() {
   currentQuakes.sort(compareQuakes);
 }
 
+// --- Search & pagination -------------------------------------------------
 // Free-text location search (case-insensitive substring match against
-// place), applied on top of the sorted currentQuakes before pagination or
-// map rendering - so the list, its page count, and the map markers all stay
-// consistent with what's actually being searched for.
+// place). Deliberately searches the entire cached database, not just the
+// currently displayed day-range window, so it can surface an old or
+// looked-up event even while a narrow time range is selected.
 let searchQuery = "";
 
 function getSearchFiltered() {
   if (!searchQuery) return currentQuakes;
-  return currentQuakes.filter((q) => (q.place || "").toLowerCase().includes(searchQuery));
+  // Search intentionally overrides the day-range filter and looks across
+  // every cached earthquake, not just the ones currently in view - so a
+  // search can surface an old/looked-up event even on a narrow time range.
+  return EqDb.getEarthquakes(0)
+    .filter((q) => (q.place || "").toLowerCase().includes(searchQuery))
+    .sort(compareQuakes);
 }
 
 // Pagination: only the table is paginated (the map always shows every
 // matching quake - hiding markers based on a list page would be confusing).
 // Resets to one page on fresh data or a new search, but survives a sort
 // re-render so re-sorting doesn't collapse an already-expanded list.
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 50;
 let visibleCount = PAGE_SIZE;
 
 function updateLoadMoreLink(filteredTotal) {
@@ -181,6 +186,7 @@ function wireSortHeaders() {
   });
 }
 
+// --- Status helpers & tabs ------------------------------------------------
 function setDbStatus(msg) {
   dbStatusEl.textContent = msg;
 }
@@ -199,6 +205,7 @@ function switchTab(tab) {
   tabDetailBtn.classList.toggle("active", showDetail);
 }
 
+// --- Rendering & selection -------------------------------------------
 // Pure local render: re-query the already-cached SQLite data for the
 // currently selected day range and redraw the list/map/detail panel.
 // Never touches the network.
@@ -262,6 +269,7 @@ async function refetchSingleDetail(id) {
   }
 }
 
+// --- Event ID lookup -------------------------------------------------
 // Looks up one specific earthquake by USGS event ID and saves it through the
 // normal flow (upsertEarthquake + fetchDetail/upsertDetail), regardless of
 // magnitude or age - this is how events older than SYNC_DAYS (or below the
@@ -294,6 +302,7 @@ async function lookupEvent(id) {
   }
 }
 
+// --- USGS sync (Fetch New / Re-fetch All) ---------------------------
 async function runWithConcurrency(items, limit, worker) {
   let index = 0;
   async function next() {
@@ -379,6 +388,7 @@ async function fullSync({ force = false } = {}) {
   }
 }
 
+// --- Database connection UI --------------------------------------------
 async function connectAndSync(connectFn) {
   const { name } = await connectFn();
   dbReady = true;
@@ -437,6 +447,7 @@ async function initDbUi() {
   }
 }
 
+// --- Startup & event wiring ----------------------------------------------
 EqMap.initMap();
 setControlsEnabled(false);
 initDbUi();

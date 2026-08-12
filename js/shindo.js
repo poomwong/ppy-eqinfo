@@ -1,3 +1,8 @@
+// Computes JMA Shindo (seismic intensity) from PGA, and picks which PGA
+// source (official on-land instrument vs. DYFI crowd reports) to trust for
+// a given ShakeMap-backed earthquake. See localestimate.js for the
+// magnitude-only estimate used when there's no ShakeMap at all.
+
 const GAL_PER_G = 980.665;
 
 const SHINDO_ICONS = {
@@ -77,4 +82,4 @@ function dyfiOnlandPga(row) {
   return { pgaG, source: "dyfi" };
 }
 
-window.Shindo = { computeShindoFromPgaG, primaryOnlandPga, dyfiOnlandPga, SHINDO_ICONS };
+window.Shindo = { computeShindoFromPgaG, primaryOnlandPga, dyfiOnlandPga };

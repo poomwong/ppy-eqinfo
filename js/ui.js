@@ -1,3 +1,8 @@
+// Pure rendering: builds the summary table, map popups' shared badges, and
+// the earthquake detail panel from already-loaded data. Never fetches
+// anything itself - main.js owns all data loading/state and calls into
+// EqUi.renderTable/renderDetail with whatever it wants shown.
+
 function formatDateTime(ms) {
   return TimeFormat.format(ms);
 }
@@ -236,11 +241,11 @@ const BANGKOK_DEFAULT = { lat: 13.7563, lon: 100.5018 };
 
 // Estimated MMI + JMA long-period class at an arbitrary location (default
 // Bangkok), from magnitude + distance alone - no ShakeMap data involved.
-// Restricted to earthquakes sourced in Thailand/Myanmar/Andaman/Arakan (see
-// LocalEstimate.isInSourceRegion) and hidden when the estimate rounds to
-// MMI 0 (not felt) at that distance - so this only shows up for the
-// specific source regions with a known connection to the target location,
-// not every earthquake with an epicenter.
+// LocalEstimate.estimateLocal itself restricts this to earthquakes sourced
+// in Thailand/Myanmar/Andaman/Arakan and returns null outside that region
+// or when nothing would be felt - so this only shows up for the specific
+// source regions with a known connection to the target location, not every
+// earthquake with an epicenter.
 function computeLocalEstimate(quake, targetLocation) {
   if (!targetLocation || quake.mag == null || quake.latitude == null || quake.longitude == null) return null;
   return LocalEstimate.estimateLocal(
@@ -388,4 +393,4 @@ function renderDetail(quake, detail, targetLocation) {
   }
 }
 
-window.EqUi = { renderTable, renderDetail, formatDateTime };
+window.EqUi = { renderTable, renderDetail };

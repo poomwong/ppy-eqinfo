@@ -134,4 +134,4 @@ function estimateLocal(quake, target, applyBangkokAmplification) {
   };
 }
 
-window.LocalEstimate = { haversineKm, aww12Mmi, estimateLocal, longPeriodClassFromKine, isInSourceRegion };
+window.LocalEstimate = { estimateLocal };

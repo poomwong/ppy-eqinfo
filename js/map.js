@@ -1,3 +1,6 @@
+// Leaflet map: markers with a popup-first flow (click shows the popup;
+// the popup's own "View Details" link opens the in-app detail tab).
+
 let map;
 let markersLayer;
 

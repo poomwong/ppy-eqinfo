@@ -55,6 +55,7 @@ main {
 
 #lookup-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 1rem;
@@ -78,18 +79,6 @@ main {
 #lookup-status {
   color: var(--muted);
   font-size: 0.85rem;
-}
-
-#search-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-#search-bar label {
-  color: var(--muted);
-  font-size: 0.9rem;
 }
 
 #location-search-input {

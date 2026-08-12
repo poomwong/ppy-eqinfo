@@ -1,3 +1,8 @@
+// Persists the File System Access API's FileSystemFileHandle across page
+// loads via IndexedDB (handles can't be stored in localStorage/cookies -
+// they're not serializable to a string), so the .sqlite file only needs to
+// be picked once instead of every session.
+
 const HANDLE_DB_NAME = "eqinfo-app";
 const HANDLE_STORE_NAME = "handles";
 const HANDLE_KEY = "sqlite-file-handle";

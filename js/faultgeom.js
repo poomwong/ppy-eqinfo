@@ -1,3 +1,7 @@
+// Interprets a nodal plane's strike/dip/rake in plain terms: fault type
+// (strike-slip/reverse/normal/oblique) and which way the ground actually
+// moved (compass bearing + up/down), for display alongside the beachball.
+
 function toRad(deg) {
   return (deg * Math.PI) / 180;
 }

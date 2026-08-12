@@ -1,3 +1,7 @@
+// SQLite (via sql.js/WASM) persistence layer, backed by a local .sqlite
+// file connected through the File System Access API. Owns the schema,
+// migrations, and all CRUD - main.js is the only caller.
+
 const DB_FILENAME_SUGGESTION = "eqinfo.sqlite";
 const SQLJS_CDN_BASE = "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/";
 
