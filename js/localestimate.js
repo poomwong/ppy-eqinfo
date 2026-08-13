@@ -91,6 +91,13 @@ function mmiToApproxPgvCms(mmi) {
 // the long-period estimate (not the headline MMI), reflects that the
 // long-period content is disproportionately amplified beyond what the
 // uniform MMI bump alone implies.
+//
+// Unlike the headline MMI bump (BANGKOK_AMPLIFICATION_MMI), this is applied
+// unconditionally rather than gated behind applyBangkokAmplification - the
+// basin's long-period resonance is a physical property of the site, not an
+// optional/speculative adjustment the user should have to opt into, and
+// without it the long-period badge almost never clears the JMA class 1
+// threshold (5 kine) for events at Bangkok's typical distance.
 const BANGKOK_LONGPERIOD_MULTIPLIER = 2.5;
 
 // JMA's official 長周期地震動階級 (long-period ground motion class) bands, in
@@ -121,7 +128,7 @@ function estimateLocal(quake, target, applyBangkokAmplification) {
   const mmiRounded = Math.round(mmi);
 
   const basePgvCms = mmiToApproxPgvCms(mmi);
-  const longPeriodPgvCms = applyBangkokAmplification ? basePgvCms * BANGKOK_LONGPERIOD_MULTIPLIER : basePgvCms;
+  const longPeriodPgvCms = basePgvCms * BANGKOK_LONGPERIOD_MULTIPLIER;
   const longPeriodClass = longPeriodClassFromKine(longPeriodPgvCms);
 
   return {

@@ -275,6 +275,10 @@ function localEstimateBadges(quake, targetLocation) {
 
   const isBangkokDefault = targetLocation.lat === BANGKOK_DEFAULT.lat && targetLocation.lon === BANGKOK_DEFAULT.lon;
   const locLabel = isBangkokDefault ? "Bangkok" : `${estimate.repiKm.toFixed(0)}km site`;
+  // Only the headline MMI badge is gated behind the checkbox - the
+  // long-period badge below always includes Bangkok's basin resonance,
+  // since that's a physical site property rather than a speculative
+  // adjustment (see BANGKOK_LONGPERIOD_MULTIPLIER in localestimate.js).
   const amplifyNote = targetLocation.amplify ? ", with Bangkok basin amplification applied" : "";
   const commonTitle = `Estimated from magnitude + epicentral distance (${estimate.repiKm.toFixed(0)}km to ${locLabel}) via the Allen, Wald &amp; Worden (2012) IPE${amplifyNote} - NOT derived from ShakeMap data, a rough estimate only`;
 
@@ -292,7 +296,7 @@ function localEstimateBadges(quake, targetLocation) {
   const longPeriod =
     estimate.longPeriodClass > 0
       ? `
-    <div class="intensity-badge" title="Estimated JMA long-period ground motion class ${estimate.longPeriodClass} (~${estimate.longPeriodKine.toFixed(1)} kine estimated) - a rough estimate derived from the local MMI estimate, not JMA's actual computed grade">
+    <div class="intensity-badge" title="Estimated JMA long-period ground motion class ${estimate.longPeriodClass} (~${estimate.longPeriodKine.toFixed(1)} kine estimated), including Bangkok basin long-period resonance - a rough estimate derived from the local MMI estimate, not JMA's actual computed grade">
       <img class="shindo-icon" src="${LONG_PERIOD_ICONS[estimate.longPeriodClass]}" alt="Long-period class ${estimate.longPeriodClass}">
       <span class="intensity-label">LONG PERIOD</span>
       <span class="intensity-value">${LONG_PERIOD_LABELS[estimate.longPeriodClass]}</span>
