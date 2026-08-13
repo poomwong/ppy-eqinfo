@@ -35,6 +35,8 @@
       </div>
     </div>
     <button id="db-export-btn" title="Download the current local database as a portable eqinfo.sqlite file - useful for backups or moving data to another browser/device">Export .sqlite</button>
+    <button id="db-import-btn" title="Replace all earthquake data currently stored in this browser with the contents of a .sqlite file - overwrites everything here, so export first if you want to keep it">Import .sqlite</button>
+    <input type="file" id="db-import-input" accept=".sqlite,.db,application/x-sqlite3" class="hidden">
     <span id="status"></span>
     <span id="db-status"></span>
   </section>

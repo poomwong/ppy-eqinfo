@@ -172,6 +172,21 @@ function exportSqliteFile() {
   URL.revokeObjectURL(url);
 }
 
+// Counterpart to exportSqliteFile(): replaces everything currently in
+// IndexedDB with the contents of a .sqlite file the user picks (e.g. a
+// previous export, or an old File System Access-era database). Parses into a
+// standalone Database first and only swaps it in on success, so a corrupt/
+// non-sqlite file the user accidentally picks can't wipe out their existing
+// data - it throws instead, leaving sqlDb untouched.
+async function importSqliteFile(bytes) {
+  await ensureSqlJs();
+  const imported = new SQL.Database(new Uint8Array(bytes));
+  imported.run(SCHEMA);
+  sqlDb = imported;
+  migrateDetailsTable();
+  await persist();
+}
+
 function run(sql, params = []) {
   sqlDb.run(sql, params);
 }
@@ -286,6 +301,7 @@ window.EqDb = {
   isSupported,
   loadDatabase,
   exportSqliteFile,
+  importSqliteFile,
   upsertEarthquake,
   getEarthquakes,
   getDetail,

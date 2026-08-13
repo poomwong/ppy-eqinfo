@@ -11,6 +11,8 @@ const refetchAllBtn = document.getElementById("refetch-all-btn");
 const timeToggleBtn = document.getElementById("time-toggle-btn");
 const timeColLabel = document.getElementById("time-col-label");
 const dbExportBtn = document.getElementById("db-export-btn");
+const dbImportBtn = document.getElementById("db-import-btn");
+const dbImportInput = document.getElementById("db-import-input");
 const tabListBtn = document.getElementById("tab-list");
 const tabDetailBtn = document.getElementById("tab-detail");
 const lookupInput = document.getElementById("lookup-input");
@@ -556,11 +558,48 @@ async function initDb() {
   }
 }
 
+// Counterpart to Export: lets the user pick a .sqlite file (e.g. a previous
+// export) and replaces everything currently stored in this browser's
+// IndexedDB with it. Destructive and irreversible from the app's own point
+// of view, so it's gated behind a confirm() - the only guard against a
+// misclick wiping out data the user hasn't exported yet.
+async function importDatabaseFile(file) {
+  if (!confirm(`Import "${file.name}"? This replaces all earthquake data currently stored in this browser. Export first if you want to keep it.`)) {
+    return;
+  }
+  setControlsEnabled(false);
+  setDbStatus("Importing database...");
+  try {
+    const bytes = await file.arrayBuffer();
+    await EqDb.importSqliteFile(bytes);
+    selectedId = null;
+    tabDetailBtn.disabled = true;
+    tabDetailBtn.textContent = "Details";
+    document.getElementById("detail-panel").innerHTML =
+      '<p class="empty-note">Select an earthquake from the list or map to see technical details.</p>';
+    switchTab("list");
+    renderFromDb();
+    setDbStatus("");
+    statusEl.textContent = `Imported ${currentQuakes.length} earthquake(s).`;
+  } catch (err) {
+    setDbStatus(`Import failed: ${err.message}`);
+    console.error(err);
+  } finally {
+    setControlsEnabled(true);
+  }
+}
+
 // --- Startup & event wiring ----------------------------------------------
 EqMap.initMap();
 setControlsEnabled(false);
 initDb();
 dbExportBtn.addEventListener("click", () => EqDb.exportSqliteFile());
+dbImportBtn.addEventListener("click", () => dbImportInput.click());
+dbImportInput.addEventListener("change", () => {
+  const file = dbImportInput.files[0];
+  dbImportInput.value = "";
+  if (file) importDatabaseFile(file);
+});
 
 fetchNewBtn.addEventListener("click", () => fullSync({ force: false }));
 refetchAllBtn.addEventListener("click", () => fullSync({ force: true }));
