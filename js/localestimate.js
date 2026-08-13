@@ -72,7 +72,7 @@ const MAX_VALID_DISTANCE_KM = 5000;
 // soft clay - Chao Phraya basin) show MMI ~4.2-5.5. +1.5 sits in that gap.
 // This represents Bangkok's basin resonance specifically, not a general-
 // purpose site term - it should not be applied to other locations.
-const BANGKOK_AMPLIFICATION_MMI = 1.5;
+const BANGKOK_AMPLIFICATION_MMI = 1.6;
 
 // Wald et al. (1999b) PGV-MMI relationship (as reproduced in Sokolov 2013),
 // inverted to recover an approximate PGV from an MMI estimate. Calibrated for
@@ -98,7 +98,7 @@ function mmiToApproxPgvCms(mmi) {
 // optional/speculative adjustment the user should have to opt into, and
 // without it the long-period badge almost never clears the JMA class 1
 // threshold (5 kine) for events at Bangkok's typical distance.
-const BANGKOK_LONGPERIOD_MULTIPLIER = 2.5;
+const BANGKOK_LONGPERIOD_MULTIPLIER = 1.6;
 
 // JMA's official 長周期地震動階級 (long-period ground motion class) bands, in
 // kine (cm/s) of absolute velocity response spectrum. We only have a PGV
