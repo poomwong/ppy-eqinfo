@@ -270,6 +270,42 @@ function switchTab(tab) {
   tabDetailBtn.classList.toggle("active", showDetail);
 }
 
+// Pushes a history entry when entering the Details tab so the device/browser
+// back button returns to List & Map instead of leaving the page entirely -
+// switchTab() alone has no effect on browser history. Guarded so repeatedly
+// selecting different quakes while already on Details doesn't stack up a new
+// history entry per click.
+let detailHistoryPushed = false;
+function enterDetailTab() {
+  switchTab("detail");
+  if (!detailHistoryPushed) {
+    history.pushState({ view: "detail" }, "");
+    detailHistoryPushed = true;
+  }
+}
+
+// Mirrors the back-button path so the List & Map tab button and the back
+// button behave the same way: if we pushed a history entry to get into
+// Details, unwind it via history.back() (popstate below does the actual
+// tab switch) rather than switching directly.
+function exitDetailTab() {
+  if (detailHistoryPushed) {
+    history.back();
+  } else {
+    switchTab("list");
+  }
+}
+
+window.addEventListener("popstate", (e) => {
+  if (e.state && e.state.view === "detail") {
+    switchTab("detail");
+    detailHistoryPushed = true;
+  } else {
+    switchTab("list");
+    detailHistoryPushed = false;
+  }
+});
+
 // --- Rendering & selection -------------------------------------------
 // Pure local render: re-query the entire cached SQLite database (search and
 // pagination handle narrowing what's actually shown) and redraw the
@@ -297,7 +333,7 @@ function selectQuake(id) {
 
   tabDetailBtn.disabled = false;
   tabDetailBtn.textContent = quake.place ? `Details: ${quake.place}` : "Details";
-  switchTab("detail");
+  enterDetailTab();
 
   EqUi.renderDetail(quake, EqDb.getDetail(id), targetLocation);
   wireDetailButtons();
@@ -578,6 +614,7 @@ async function importDatabaseFile(file) {
     document.getElementById("detail-panel").innerHTML =
       '<p class="empty-note">Select an earthquake from the list or map to see technical details.</p>';
     switchTab("list");
+    detailHistoryPushed = false;
     renderFromDb();
     setDbStatus("");
     statusEl.textContent = `Imported ${currentQuakes.length} earthquake(s).`;
@@ -603,8 +640,8 @@ dbImportInput.addEventListener("change", () => {
 
 fetchNewBtn.addEventListener("click", () => fullSync({ force: false }));
 refetchAllBtn.addEventListener("click", () => fullSync({ force: true }));
-tabListBtn.addEventListener("click", () => switchTab("list"));
-tabDetailBtn.addEventListener("click", () => switchTab("detail"));
+tabListBtn.addEventListener("click", () => exitDetailTab());
+tabDetailBtn.addEventListener("click", () => enterDetailTab());
 wireSortHeaders();
 updateSortIndicators();
 
