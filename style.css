@@ -43,6 +43,7 @@ main {
 
 #controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 1rem;
@@ -110,6 +111,7 @@ main {
   border-radius: 8px;
   padding: 0.9rem;
   min-width: 240px;
+  max-width: calc(100vw - 3rem);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
@@ -332,6 +334,7 @@ footer {
 
 .detail-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
@@ -545,4 +548,75 @@ dd {
   display: inline-block;
   margin-top: 0.35rem;
   font-weight: 600;
+}
+
+/* Mobile */
+
+@media (max-width: 700px) {
+  header {
+    padding: 1.1rem 1rem 0.85rem;
+  }
+
+  header h1 {
+    font-size: 1.25rem;
+  }
+
+  main {
+    padding: 1rem 1rem 2rem;
+  }
+
+  #controls,
+  #lookup-bar {
+    gap: 0.5rem;
+  }
+
+  #lookup-input,
+  #location-search-input {
+    width: 100%;
+    flex: 1 1 160px;
+  }
+
+  #map {
+    height: 260px;
+    margin-bottom: 1rem;
+  }
+
+  table {
+    font-size: 0.82rem;
+  }
+
+  #detail-section {
+    padding: 1rem;
+  }
+
+  .tensor-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .tensor-layout .grid-2 {
+    width: 100%;
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .tensor-components {
+    grid-template-columns: max-content 1fr;
+  }
+
+  /* The popup is normally anchored absolutely off its toggle button, which
+     can sit anywhere along a wrapped #controls row on a narrow screen - a
+     fixed offset avoids it being pushed partly off-screen depending on where
+     that button happens to land. */
+  #location-popup {
+    position: fixed;
+    top: 4.75rem;
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    max-width: none;
+  }
 }
