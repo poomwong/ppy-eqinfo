@@ -71,13 +71,20 @@ let selectedId = null;
 let currentQuakes = [];
 
 // --- Day-range filter (list & map) ----------------------------------------
-// Maps each selectable display window (days shown) to its "current"
-// highlight window (days, used for the map marker accent color - see
-// markerColor in map.js) - highlight is always a fraction of the display
-// window so it scales with it rather than needing separate configuration.
-const RANGE_PRESETS = { 30: 7, 90: 14, 180: 30 };
-const DEFAULT_RANGE_DAYS = 90;
-let dayRangeDays = DEFAULT_RANGE_DAYS;
+// Maps each selectable display window (days: null means unbounded, i.e.
+// "All Time") to its "current" highlight window (highlightDays, used for
+// the map marker accent color - see markerColor in map.js) - highlight is
+// always a fraction of the display window so it scales with it rather than
+// needing separate configuration, except for "All Time" which has no window
+// to scale from and just keeps the widest highlight (30 days).
+const RANGE_PRESETS = {
+  30: { days: 30, highlightDays: 7 },
+  90: { days: 90, highlightDays: 14 },
+  180: { days: 180, highlightDays: 30 },
+  all: { days: null, highlightDays: 30 },
+};
+const DEFAULT_RANGE_KEY = "90";
+let rangeKey = DEFAULT_RANGE_KEY;
 
 // --- Table sort ------------------------------------------------------
 // Deliberately just an in-memory variable, not persisted anywhere -
@@ -168,7 +175,7 @@ function renderVisibleTable() {
 }
 
 function renderFilteredMap() {
-  const highlightMs = RANGE_PRESETS[dayRangeDays] * 24 * 60 * 60 * 1000;
+  const highlightMs = RANGE_PRESETS[rangeKey].highlightDays * 24 * 60 * 60 * 1000;
   EqMap.renderMap(getSearchFiltered(), (id) => selectQuake(id), highlightMs);
 }
 
@@ -322,7 +329,8 @@ window.addEventListener("popstate", (e) => {
 // pagination handle narrowing what's actually shown) and redraw the
 // list/map/detail panel. Never touches the network.
 function renderFromDb() {
-  const sinceMs = Date.now() - dayRangeDays * 24 * 60 * 60 * 1000;
+  const rangeDays = RANGE_PRESETS[rangeKey].days;
+  const sinceMs = rangeDays === null ? 0 : Date.now() - rangeDays * 24 * 60 * 60 * 1000;
   currentQuakes = EqDb.getEarthquakes(sinceMs);
   sortCurrentQuakes();
   updateSortIndicators();
@@ -674,7 +682,7 @@ timeToggleBtn.addEventListener("click", () => {
 updateTimeToggleUi();
 
 rangeSelect.addEventListener("change", () => {
-  dayRangeDays = Number(rangeSelect.value);
+  rangeKey = rangeSelect.value;
   visibleCount = PAGE_SIZE;
   renderFromDb();
 });
