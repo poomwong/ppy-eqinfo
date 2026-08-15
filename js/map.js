@@ -4,25 +4,17 @@
 let map;
 let markersLayer;
 
-// Fixed zoom level 2 already shows the entire globe, so zooming in/out only
-// adds confusion (and lets the map drift out of sync with the always-global
-// table/search below it) without adding any real information - locked to a
-// single zoom level via minZoom === maxZoom, with every zoom-triggering
-// interaction disabled. Panning/dragging is left on so overlapping markers
-// near the edges are still reachable.
+// Zoom level 2 shows the whole globe at once - kept as the initial view and
+// as the lower zoom bound (nothing useful below "whole world"), but zooming
+// in is now allowed so individual clusters of nearby markers can be told
+// apart.
 const FIXED_ZOOM = 2;
 
 function initMap() {
   map = L.map("map", {
     worldCopyJump: true,
-    zoomControl: false,
-    scrollWheelZoom: false,
-    doubleClickZoom: false,
-    touchZoom: false,
-    boxZoom: false,
-    keyboard: false,
     minZoom: FIXED_ZOOM,
-    maxZoom: FIXED_ZOOM,
+    maxZoom: 10,
   }).setView([15, 0], FIXED_ZOOM);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
