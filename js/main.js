@@ -10,6 +10,7 @@ const fetchNewBtn = document.getElementById("fetch-new-btn");
 const refetchAllBtn = document.getElementById("refetch-all-btn");
 const timeToggleBtn = document.getElementById("time-toggle-btn");
 const timeColLabel = document.getElementById("time-col-label");
+const rangeSelect = document.getElementById("range-select");
 const dbExportBtn = document.getElementById("db-export-btn");
 const dbImportBtn = document.getElementById("db-import-btn");
 const dbImportInput = document.getElementById("db-import-input");
@@ -68,6 +69,15 @@ const DETAIL_FETCH_CONCURRENCY = 4;
 let dbReady = false;
 let selectedId = null;
 let currentQuakes = [];
+
+// --- Day-range filter (list & map) ----------------------------------------
+// Maps each selectable display window (days shown) to its "current"
+// highlight window (days, used for the map marker accent color - see
+// markerColor in map.js) - highlight is always a fraction of the display
+// window so it scales with it rather than needing separate configuration.
+const RANGE_PRESETS = { 30: 7, 90: 14, 180: 30 };
+const DEFAULT_RANGE_DAYS = 90;
+let dayRangeDays = DEFAULT_RANGE_DAYS;
 
 // --- Table sort ------------------------------------------------------
 // Deliberately just an in-memory variable, not persisted anywhere -
@@ -158,7 +168,8 @@ function renderVisibleTable() {
 }
 
 function renderFilteredMap() {
-  EqMap.renderMap(getSearchFiltered(), (id) => selectQuake(id));
+  const highlightMs = RANGE_PRESETS[dayRangeDays] * 24 * 60 * 60 * 1000;
+  EqMap.renderMap(getSearchFiltered(), (id) => selectQuake(id), highlightMs);
 }
 
 function updateSortIndicators() {
@@ -311,7 +322,8 @@ window.addEventListener("popstate", (e) => {
 // pagination handle narrowing what's actually shown) and redraw the
 // list/map/detail panel. Never touches the network.
 function renderFromDb() {
-  currentQuakes = EqDb.getEarthquakes(0);
+  const sinceMs = Date.now() - dayRangeDays * 24 * 60 * 60 * 1000;
+  currentQuakes = EqDb.getEarthquakes(sinceMs);
   sortCurrentQuakes();
   updateSortIndicators();
   visibleCount = PAGE_SIZE;
@@ -660,6 +672,12 @@ timeToggleBtn.addEventListener("click", () => {
   renderFromDb();
 });
 updateTimeToggleUi();
+
+rangeSelect.addEventListener("change", () => {
+  dayRangeDays = Number(rangeSelect.value);
+  visibleCount = PAGE_SIZE;
+  renderFromDb();
+});
 
 lookupBtn.addEventListener("click", () => lookupEvent(lookupInput.value));
 lookupInput.addEventListener("keydown", (e) => {

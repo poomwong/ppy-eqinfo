@@ -19,6 +19,12 @@
     <button id="fetch-new-btn" title="Check USGS for new or updated earthquakes and fetch technical details only for those - skips events already cached. Only covers the past 365 days; use the USGS event ID lookup below for older earthquakes.">Fetch New</button>
     <button id="refetch-all-btn" title="Force refetch the full earthquake list and all technical details (moment tensor, ShakeMap) from USGS, even if already cached. Only covers the past 365 days; use the USGS event ID lookup below for older earthquakes.">Re-fetch All</button>
     <button id="time-toggle-btn" title="Toggle displayed times between UTC and your local timezone - all data is always stored in UTC">Time: UTC</button>
+    <label for="range-select">Show:</label>
+    <select id="range-select" title="Limit the list and map to earthquakes within this many days - recent events within the highlight window are shown in the accent color on the map">
+      <option value="30">Last 30 Days</option>
+      <option value="90" selected>Last 90 Days</option>
+      <option value="180">Last 180 Days</option>
+    </select>
     <div id="location-control">
       <button id="location-toggle-btn" title="Set the location used to estimate local MMI / long-period shaking on the detail page">Location: Bangkok</button>
       <div id="location-popup" class="hidden">

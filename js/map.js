@@ -37,19 +37,21 @@ function markerRadius(mag) {
 
 const RECENT_COLOR = "#ff6b4a";
 const STALE_COLOR = "#9aa4b2";
-const STALE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Recent (<=7 days old) quakes keep the usual accent color; older ones fade
-// to gray so the map reads at a glance as "what's currently active" rather
-// than an undifferentiated pile of every event in the loaded time range.
-function markerColor(timeMs) {
-  return Date.now() - timeMs > STALE_AGE_MS ? STALE_COLOR : RECENT_COLOR;
+// Quakes within the caller-supplied highlight window keep the usual accent
+// color; older ones (but still within the displayed day range) fade to gray
+// so the map reads at a glance as "what's currently active" rather than an
+// undifferentiated pile of every event in the loaded time range. The window
+// itself tracks the range preset selected in the UI (see RANGE_PRESETS in
+// main.js), not a fixed constant.
+function markerColor(timeMs, highlightMs) {
+  return Date.now() - timeMs > highlightMs ? STALE_COLOR : RECENT_COLOR;
 }
 
-function renderMap(quakes, onSelect) {
+function renderMap(quakes, onSelect, highlightMs) {
   markersLayer.clearLayers();
   quakes.forEach((q) => {
-    const color = markerColor(q.time);
+    const color = markerColor(q.time, highlightMs);
     const marker = L.circleMarker([q.latitude, q.longitude], {
       radius: markerRadius(q.mag),
       color,
