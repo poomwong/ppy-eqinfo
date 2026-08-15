@@ -71,6 +71,7 @@ function renderTable(quakes, onSelect, targetLocation) {
       <td>${formatDateTime(q.time)}</td>
       <td>${fmtNum(q.latitude, 3)}, ${fmtNum(q.longitude, 3)}</td>
       <td class="${magClass}">${reviewInfoIcon(q)}${fmtNum(q.mag, 1)}</td>
+      <td>${fmtNum(q.depth, 1)}</td>
       <td>${q.place ?? "Unknown"}</td>
       <td>${mmiCell(q)}</td>
       <td>${shindoCell(q)}</td>

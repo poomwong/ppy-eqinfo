@@ -101,6 +101,8 @@ function sortValue(q, column) {
       return q.time ?? null;
     case "mag":
       return q.mag ?? null;
+    case "depth":
+      return q.depth ?? null;
     case "mmi":
       return q.d_sm_max_mmi ?? null;
     case "shindo": {
